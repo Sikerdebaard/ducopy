@@ -1,0 +1,16 @@
+{
+    "Node": 1,
+    "General": {
+      "Type": { "Id": 65537, "Val": "MOCKBOX" },
+      "Addr": { "Id": 65540, "Val": 1 },
+      "SwVersion": { "Id": 65544, "Val": "MOCKSW 1.0.0" }
+    },
+    "NetworkDuco": {
+      "CommErrorCtr": { "Id": 65556, "Val": 0 }
+    },
+    "Ventilation": {
+      "State": { "Id": 65548, "Val": "AUTO" },
+      "FlowLvlOvrl": { "Id": 65554, "Val": 255 }
+    }
+  }
+  

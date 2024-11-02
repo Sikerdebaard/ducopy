@@ -1,0 +1,9 @@
+{
+    "ApiVersion": {"Id": 130816, "Val": "MOCKAPI 2.0.6.0"},
+    "PublicApiVersion": {"Id": 130817, "Val": "MOCK 2.0"},
+    "ApiInfo": [
+      {"Url": "/api", "QueryParameters": [], "Methods": ["GET"]},
+      {"Url": "/info", "QueryParameters": ["module", "submodule", "parameter"], "Methods": ["GET"]}
+    ]
+}
+  

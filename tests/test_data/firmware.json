@@ -1,0 +1,18 @@
+{
+    "Upload": {
+      "State": "IDLE",
+      "SubState": "IDLE",
+      "FileName": "",
+      "FileSize": 0,
+      "Progress": 0,
+      "Status": "UDF"
+    },
+    "Files": [
+      {
+        "ProductId": 12345,
+        "SwVersion": "1.0.0",
+        "ProductName": "MOCK_PRODUCT"
+      }
+    ]
+  }
+  

@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+extend-select = ["ANN", "UP"]
+ignore = ["E501", "ANN101"]
+
+[tool.ruff.lint.flake8-annotations]
+mypy-init-return = true
+
+[project]
+requires-python = ">=3.10"

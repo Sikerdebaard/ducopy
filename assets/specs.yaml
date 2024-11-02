@@ -1,0 +1,976 @@
+openapi: "3.0.3"
+
+info:
+    version: "2.0"
+    title: DucoLocal Public API (Device API)
+    description: "This document describes the Ethernet interface used on the Duco devices.
+        \ The interface is based upon JSON structures that can be retrieved using HTTP requests.
+        \ Version numbering can be added in the URL, but calls without the versioning will be redirected to the latest version.
+        \n 1. Public API: Open for everyone"
+
+servers:
+    -   url: 'https://duco_{MACaddress}.local/'
+        description: By mDNS hostname
+        variables:
+            #protocol:
+            #    enum: [https]
+            #    default: https
+            MACaddress:
+                default: "123ABC"
+                description: Last six values of MAC address    
+    -   url: 'https://duco_{MACaddress}.local/v2/'
+        description: By mDNS hostname
+        variables:
+            #protocol:
+            #    enum: [https]
+            #    default: https
+            MACaddress:
+                default: "123ABC"
+                description: Last six values of MAC address
+    -   url: 'https://{ipaddress}/'
+        description: By IP-address
+        variables:
+            #protocol:
+            #    enum: [https]
+            #    default: https
+            ipaddress:
+                default: "192.168.0.1"
+                description: IP-address
+    -   url: 'https://{ipaddress}/v2/'
+        description: By IP-address
+        variables:
+            #protocol:
+            #    enum: [https]
+            #    default: https
+            ipaddress:
+                default: "192.168.0.1"
+                description: IP-address
+                
+tags:
+    - name: Api
+    - name: Info
+    - name: Config
+    - name: Action
+                
+paths:
+    /api:
+        get:
+            summary: API info. This contains the details of what the API supports based on the connected device and provied API key.
+            operationId: ApiGet
+            tags:
+                -   Api
+            responses:
+                '200':
+                    description: Info    
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/Api" 
+    /info:
+        get:
+            summary: System info. This contains general info, related to the system. When Authorized (API key), more info is available.    
+            operationId: InfoGet
+            tags:
+                -   Info
+            parameters:
+                -   name: module
+                    in: query
+                    description: Optional modulename. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: array
+                        items:
+                            type: string
+                -   name: submodule
+                    in: query
+                    description: Optional submodulename. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+                -   name: parameter
+                    in: query
+                    description: Optional submodulename. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+            responses:
+                '200':
+                    description: Info
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/Info"                  
+                  
+ #               '404':
+ #                   $ref: "#/components/responses/NotFoundError"
+    /info/nodes:
+        get:
+            summary: Node overview info.     When Authorized (API key), more info is available.    
+            operationId: InfoNodesOverviewGet
+            tags:
+                -   Info
+            parameters:
+                -   name: module
+                    in: query
+                    description: Optional modulename. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: array
+                        items:
+                            type: string
+                -   name: parameter
+                    in: query
+                    description: Optional parametername. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+            responses:
+                '200':
+                    description: Node Overview
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/InfoNodesOverview"
+
+    /info/nodes/{node}:
+        get:
+            summary: Node info. When Authorized (API key), more info is available.    
+            operationId: InfoNodeGet
+            tags:
+                -   Info
+            parameters:
+                -   name: node
+                    in: path
+                    description: Nodenumber
+                    required: true
+                    schema:
+                        type: integer
+                        format: int32
+                -   name: parameter
+                    in: query
+                    description: Optional parametername. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+            responses:
+                '200':
+                    description: NodeInfo
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/InfoNode"
+                '404':
+                    $ref: "#/components/responses/NotFoundError" 
+
+    /config:
+        get:
+            summary: General config
+            operationId: ConfigGet
+            tags:
+                -   Config
+            parameters:
+                -   name: module
+                    in: query
+                    description: Optional modulename. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: array
+                        items:
+                            type: string
+                -   name: submodule
+                    in: query
+                    description: Optional submodulename. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+                -   name: parameter
+                    in: query
+                    description: Optional parametername. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+                        
+            responses:
+                '200':
+                    description: Config
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/Config"
+
+        patch:
+            summary: General config
+            operationId: ConfigPatch
+            tags:
+                -   Config
+            parameters:
+                -   name: module
+                    in: query
+                    description: Optional modulename. When all query parameters are omitted, no info is returned. Multiple selection possible with comma seperation.
+                    schema:
+                        type: array
+                        items:
+                            type: string
+                -   name: submodule
+                    in: query
+                    description: Optional submodulename. When all query parameters are omitted, no info is returned. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+                -   name: parameter
+                    in: query
+                    description: Optional parametername. When all query parameters are omitted, no info is returned. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+            requestBody:
+                description: Config parameters. Only include the config parameters you want to change ('min', 'max' en 'inc' are readonly, only 'val' can be patched)
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/Config'
+            responses:
+                '200':
+                    description: ActionResult
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/Config"  
+                '400':
+                    $ref: "#/components/responses/BadRequestError"
+                '401':
+                    $ref: "#/components/responses/UnauthorizedError"
+                '404':
+                    $ref: "#/components/responses/NotFoundError"
+                    
+    /config/nodes:
+        get:
+            summary: Get all node config
+            operationId: ConfigAllNodesGet
+            tags:
+                -   Config
+            parameters:
+                -   name: parameter
+                    in: query
+                    description: Optional parametername. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+            responses:
+                '200':
+                    description: Node Configs
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/ConfigNodeOverview"
+
+    /config/nodes/{node}:
+        get:
+            summary: Get node config
+            operationId: ConfigNodeGet
+            tags:
+                -   Config
+            parameters:
+                -   name: node
+                    in: path
+                    description: Nodenumber
+                    required: true
+                    schema:
+                        type: integer
+                        format: int32
+                -   name: parameter
+                    in: query
+                    description: Optional parametername. When omitted, all info is returned if possible. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+            responses:
+                '200':
+                    description: Node Config
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/ConfigNode"
+                '404':
+                    $ref: "#/components/responses/NotFoundError"
+        patch:
+            summary: Change node config
+            operationId: ConfigNodePatch
+            tags:
+                -   Config
+            parameters:
+                -   name: node
+                    in: path
+                    description: Nodenumber
+                    required: true
+                    schema:
+                        type: integer
+                        format: int32
+                -   name: parameter
+                    in: query
+                    description: Optional parametername. When all query parameters are omitted, no info is returned. Multiple selection possible with comma seperation.
+                    schema:
+                        type: string
+            requestBody:
+                description: Config parameters.    Only include the config parameters you want to change ('min', 'max' en 'inc' are readonly and can be omitted in the message)
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ConfigNode'
+            responses:
+                '200':
+                    description: NodeConfig
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/ConfigNode"
+                '400':
+                    $ref: "#/components/responses/BadRequestError"
+                '401':
+                    $ref: "#/components/responses/UnauthorizedError"
+                '404':
+                    $ref: "#/components/responses/NotFoundError"
+
+    /action:
+        get:
+            summary: Get supported actions
+            operationId: ActionGet
+            tags:
+                -   Action
+            responses:
+                '200':
+                    description: Supported Actions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/ActionItemList"
+        post:
+            summary: General action
+            operationId: ActionPost
+            tags:
+                -   Action
+            requestBody:
+                description: Action parameters
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/Action'
+            responses:
+                '200':
+                    description: ActionResult
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/ActionResult"
+                '400':
+                    $ref: "#/components/responses/BadRequestError"
+                '401':
+                    $ref: "#/components/responses/UnauthorizedError"
+                '404':
+                    $ref: "#/components/responses/NotFoundError"
+ 
+    /action/nodes:
+        get:
+            summary: Get supported actions
+            operationId: ActionNodesGet
+            tags:
+                -   Action
+            responses:
+                '200':
+                    description: Supported Actions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/NodeListActionItemList"
+                '400':
+                    $ref: "#/components/responses/BadRequestError"
+                '404':
+                    $ref: "#/components/responses/NotFoundError"
+    
+    /action/nodes/{node}:
+        get:
+            parameters:
+                -   name: node
+                    in: path
+                    description: Nodenumber
+                    required: true
+                    schema:
+                        type: integer
+                        format: int32
+            summary: Get supported actions
+            operationId: ActionNodeGet
+            tags:
+                -   Action
+            responses:
+                '200':
+                    description: Supported Actions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/NodeActionItemList"
+                '400':
+                    $ref: "#/components/responses/BadRequestError"
+                '404':
+                    $ref: "#/components/responses/NotFoundError"
+        post:
+            summary: Node action. When Authorized (API key), more actions are available.
+            operationId: ActionNodePost
+            tags:
+                -   Action
+            parameters:
+                -   name: node
+                    in: path
+                    description: Nodenumber
+                    required: true
+                    schema:
+                        type: integer
+                        format: int32
+            requestBody:
+                description: Action parameters
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ActionNode'
+            responses:
+                '200':
+                    description: ActionResult
+                    content:
+                        application/json:        
+                            schema:
+                                $ref: "#/components/schemas/ActionResult"
+                '400':
+                    $ref: "#/components/responses/BadRequestError"
+                '401':
+                    $ref: "#/components/responses/UnauthorizedError"
+                '404':
+                    $ref: "#/components/responses/NotFoundError"
+  
+components:
+    schemas:
+        Api: 
+            type: object
+            properties:
+                PublicApiVersion:
+                    type: string
+                    example: "2.0"
+                ApiInfo:
+                    description: API information
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                          Url:
+                            type: string
+                            example: "/info"
+                          QueryParameters:
+                            type: array
+                            items:
+                              type: string
+                              example: "module"
+                          Methods:
+                              type: array
+                              items:
+                                type: string
+                                example: "GET"
+                                enum: [GET, PATCH, POST, PUT, DELETE]
+                          Modules:
+                              type: array
+                              items:
+                                type: string
+                                example: "General"
+
+        Info:
+            type: object
+            properties:
+                General:
+                    description: General info
+                    type: object
+                    properties:
+                        Board:
+                            description: Board info
+                            type: object
+                            properties:
+                                PublicApiVersion: 
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"2.0"}
+                                BoxName:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"FOCUS"}
+                                BoxSubTypeName:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"Eu"}
+                                SerialBoardComm:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"RS123456789"}
+                                SerialBoardBox:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"RS123456789"}
+                                SerialDucoBox:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"P1234567-221101-123"}
+                                SerialDucoComm:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"P1234567-221101-123"}
+                                Time:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValue'
+                                      - example: {"Val":1652774661}
+                        Lan:
+                            description: Network info
+                            type: object
+                            properties:
+                                Mode:
+                                    type: object
+                                    properties:
+                                        Val:
+                                            type: string
+                                            example: "ETHERNET"
+                                            enum: [NO_CONNECTION, WIFI_AP, WIFI_CLIENT, ETHERNET]
+                                Ip:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"192.168.4.1"}
+                                NetMask:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"255.255.255.0"}
+                                DefaultGateway:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"192.168.4.1"}
+                                Dns:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"8.8.8.8"}
+                                Mac:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"11:22:33:DD:EE:FF"}
+                                HostName:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValueString'
+                                      - example: {"Val":"duco_ddeeff"}
+                                RssiWifi:
+                                    allOf:
+                                      - $ref: '#/components/schemas/InfoValue'
+                                      - example: {"Val":-50}
+                                ScanWifi:
+                                  description: "Neigbouring WiFi networks (only available in AP mode)"
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      Ssid:
+                                        description: SSID of the neighbouring network
+                                        type: string
+                                        example: "Duco Wifi"
+                                      AuthMode:
+                                        description: "Wifi Authentication mode of the neighbouring network"
+                                        type: string
+                                        enum: [Open, WEP, WPA_PSK, WPA2_PSK, WPA_WPA2_PSK, WPA2_ENTERPRISE, WPA3_PSK, WPA2_WPA3_PSK, WAPI_PSK]
+                                      Channel:
+                                        description: Channel of the neighbouring network
+                                        type: integer
+                                        format: int32
+                                        example: 10
+                                      Bssid:
+                                        description: "BSSID in HEX of the neighbouring network"
+                                        type: string
+                                        example: "0x18130609"
+                                      Rssi:
+                                        description: RSSPI of the neighbouring network
+                                        type: integer
+                                        format: int32
+                                        example: -56
+                Diag:
+                    description: Box status
+                    type: object
+                    properties:
+                        SubSystems:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              SubSystem:
+                                type: string
+                                enum: ["Ventilation"]
+                              Status:
+                                type: string
+                                enum: ["Ok","Disable","Error"]
+                            example:
+                              - component: "Ventilation"
+                                status: "Ok"                           
+                HeatRecovery:
+                    description: HeatRecovery info
+                    type: object
+                    properties:
+                        General:
+                            description: HeatRecovery general info
+                            type: object
+                            properties:
+                                TimeFilterRemain:
+                                    $ref: '#/components/schemas/InfoValue'
+
+        InfoNodesOverview:
+            description: "Node Overview"
+            type: object
+            properties:
+                Nodes:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/InfoNode'
+
+        InfoNode:
+            type: object
+            properties:
+                Node: 
+                    description: the node number [0-255]
+                    type: integer
+                    format: int32
+                    example: 1
+                General:
+                    type: object
+                    properties:
+                      Type:
+                          type: object
+                          properties:
+                              Val:
+                                  type: string
+                                  example: "BOX"
+                                  enum: [UNKN, IQ, CO2, RH, KLEP, TOP, COMB, CLIMA, 
+                                         UCBAT, UC, UCRH, UCVOC, UCCO2, 
+                                         VLV, VLVRH, VLVVOC, VLVCO2, 
+                                         BOX, SWITCH, ACTUAT, UCBATRH, PWMIN, IAV, IAVRH, IAVVOC, IAVCO2, BOIILER, TRONIC, VLVCO2RH]
+                      SubType: 
+                          $ref: '#/components/schemas/InfoValue'
+                      NetworkType: 
+                          type: object
+                          properties:
+                              Val:
+                                  type: string
+                                  example: "VIRT"
+                                  enum: ["-", WI, RF, VIRT]
+                      Parent: 
+                          $ref: '#/components/schemas/InfoValue'
+                      Asso: 
+                          $ref: '#/components/schemas/InfoValue'
+                      Name: 
+                          allOf:
+                            - $ref: '#/components/schemas/InfoValue'
+                            - example: {"Val": "Attic"}
+                      Identify: 
+                          $ref: '#/components/schemas/InfoValue'
+                Ventilation:
+                    type: object
+                    properties:
+                      State: 
+                          type: object
+                          properties:
+                              Val:
+                                  type: string
+                                  example: "AUTO"
+                                  enum: [AUTO, AUT1, AUT2, AUT3, MAN1, MAN2, MAN3, EMPT, CNT1, CNT2, CNT3, "-"]
+                      TimeStateRemain: 
+                          $ref: '#/components/schemas/InfoValue'
+                      TimeStateEnd: 
+                          $ref: '#/components/schemas/InfoValue'
+                      Mode:            
+                          type: object
+                          properties:
+                              Val:
+                                  type: string
+                                  example: "AUTO"
+                                  enum: ["-", AUTO, MANU, OVRL, EXTN, COOL, N/A, DSBL]
+                      FlowLvlTgt: 
+                          $ref: '#/components/schemas/InfoValue'
+                Sensor:
+                    type: object
+                    properties:
+                      IaqCo2:
+                          $ref: '#/components/schemas/InfoValue'
+                      IaqRh:
+                          $ref: '#/components/schemas/InfoValue'
+                
+        InfoValue:
+            type: object
+            properties:
+                Val:
+                    type: integer
+                    format: int32
+                    example: 0
+        
+        InfoValueFloat:
+            type: object
+            properties:
+                Val:
+                    type: number
+                    format: float
+                    example: 0.0
+        
+        InfoValueString:
+            type: object
+            properties:
+                Val:
+                    type: string
+                    example: ""
+
+        InfoValueBool:
+            type: object
+            properties:
+                Val:
+                    type: boolean
+                    example: false
+        
+        Config:
+            type: object
+            properties:
+                General:
+                    description: General config
+                    type: object
+                    properties:
+                        Time:
+                            description: Time config
+                            type: object
+                            properties:
+                                TimeZone:
+                                    $ref: '#/components/schemas/ConfigValue'
+                                Dst:
+                                    $ref: '#/components/schemas/ConfigValue'
+                        Lan:
+                            description: Lan config
+                            type: object
+                            properties:
+                                Mode:
+                                    allOf:
+                                        - description: "Config:
+                                            \n - 0 DISABLED
+                                            \n - 1 AUTO
+                                            \n - 2 ETHERNET
+                                            \n - 3 WIFI STATION MODE
+                                            \n - 4 WIFI ACCESS POINT MODE"
+                                        - $ref: '#/components/schemas/ConfigValue'
+                                Dhcp:
+                                  allOf:
+                                        - description: "Config:
+                                            \n - 0 DHCP OFF
+                                            \n - 1 DHCP ON"
+                                        - $ref: '#/components/schemas/ConfigValue'
+                                StaticIp:
+                                    allOf:
+                                      - $ref: '#/components/schemas/ConfigValueString'
+                                      - example: {"Val":"192.168.1.5"}
+                                StaticNetwMask:
+                                    allOf:
+                                      - $ref: '#/components/schemas/ConfigValueString'
+                                      - example: {"Val":"255.255.255.0"}
+                                StaticDefaultGateway:
+                                    allOf:
+                                      - $ref: '#/components/schemas/ConfigValueString'
+                                      - example: {"Val":"192.168.1.1"}
+                                StaticDns:
+                                    allOf:
+                                      - $ref: '#/components/schemas/ConfigValueString'
+                                      - example: {"Val":"8.8.8.8"}
+                                WifiClientSsid:
+                                    $ref: '#/components/schemas/ConfigValueString'
+                                WifiClientKey:
+                                    allOf:
+                                      - description: This can be changed, but will not show actual password when requested
+                                      - $ref: '#/components/schemas/ConfigValueString'
+                HeatRecovery:
+                    description: HeatRecovery config
+                    type: object
+                    properties:
+                        Bypass:
+                            description: HeatRecovery bypass config
+                            type: object
+                            properties:
+                                TempSupTgtZone1:
+                                    $ref: '#/components/schemas/ConfigValue'
+                                TempSupTgtZone2:
+                                    $ref: '#/components/schemas/ConfigValue'
+      
+        ConfigNodeOverview:
+            description: "Config all nodes"
+            type: object
+            properties:
+                Nodes:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/ConfigNode"
+
+        ConfigNewNode:
+            description: "Action"
+            type: object
+            required:
+                - Action
+            properties:
+                Name: 
+                    description: Name of the zone
+                    type: string
+                    example: Bathroom
+
+        ConfigNode:
+            type: object
+            properties:
+                Node:
+                    description: the node number [0-255]
+                    type: integer
+                    format: int32
+                    example: 1
+                Name:
+                    $ref: "#/components/schemas/ConfigValueString"
+                                
+        ConfigValue:
+            type: object
+            properties:
+                Val:
+                    description: Current value
+                    type: integer
+                    format: int32
+                    example: 10
+                Min:
+                    description: Minimum value
+                    type: integer
+                    format: int32
+                    example: 0
+                Inc:
+                    description: Increment value
+                    type: integer
+                    format: int32
+                    example: 1
+                Max:
+                    description: Maximum value
+                    type: integer
+                    format: int32
+                    example: 100
+        
+        ConfigValueString:
+            type: object
+            properties:
+                Val:
+                    description: Current value
+                    type: string
+                    example: ""
+
+        Action:
+            description: "Action"
+            type: object
+            required:
+                - Action
+            properties:
+                Action:
+                    description: Actiontype
+                    type: string
+                    enum: [SetTime, SetIdentify, SetIdentifyAll, 
+                           ScanWifi, SetWifiApMode, 
+                           ResetFilterTimeRemain]
+                Val:
+                    description: Optional action value (may be string, integer or boolean based on Action)
+                    type: string
+                    example: 12345685
+        
+        ActionNode:
+            description: "Action"
+            type: object
+            required:
+                - Action
+            properties:
+                Action:
+                    description: Actiontype
+                    type: string
+                    enum: [SetVentilationState, SetIdentify]
+                Val:
+                    description: Optional action value
+                    type: string
+                    example: MAN1
+
+        NodeListActionItemList:
+            type: array
+            items:
+                $ref: "#/components/schemas/NodeActionItemList"
+
+        NodeActionItemList:
+            type: object
+            properties:
+                Node:
+                    description: Node
+                    type: integer 
+                Actions:
+                    $ref: "#/components/schemas/ActionItemList"
+        
+        ActionItemList:
+            type: array
+            items:
+                type: object
+                properties:
+                    Action:
+                        description: Action
+                        type: string
+                        example: SetIdentify
+                    ValType:
+                        description: Action Value Type
+                        type: string
+                        enum: [None, Boolean, Integer, String, Enum]
+                        example: Boolean
+                    Enum:
+                        description: Action Value Enum Value List (optional)
+                        type: array
+                        items:
+                            type: string
+
+        ActionResult:
+            description: "ActionResult"
+            type: object
+            required:
+                - Result
+            properties:
+                Result:
+                    type: string
+                    enum: [SUCCESS, FAILED]    
+                Code:
+                    description: error code
+                    type: integer
+                    format: int32
+                    example: 12
+                Message:
+                    description: error message
+                    type: string
+                    example: Action is not performed
+        
+        Error:
+            description: "Error"
+            type: object
+            required:
+                - Result
+            properties:
+                Code:
+                    description: error code
+                    type: integer
+                    format: int32
+                    example: 12
+                Message:
+                    description: error message
+                    type: string
+                    example: Action not allowed
+            
+    responses:
+        BadRequestError:
+            description: The provided info/action is invalid
+            content:
+                application/json:        
+                    schema:
+                        $ref: "#/components/schemas/Error"
+        
+        UnauthorizedError:
+            description: API key is missing or invalid for this info/action
+            content:
+                application/json:        
+                    schema:
+                        $ref: "#/components/schemas/Error"
+        
+        NotFoundError:
+            description: The info/action was not found
+            content:
+                application/json:        
+                    schema:
+                        $ref: "#/components/schemas/Error"
+

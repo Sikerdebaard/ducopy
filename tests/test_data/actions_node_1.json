@@ -1,0 +1,41 @@
+{
+    "Node": 1,
+    "Actions": [
+      {
+        "Action": "SetVentilationState",
+        "ValType": "Enum",
+        "Enum": ["AUTO", "MANUAL", "BOOST"]
+      },
+      {
+        "Action": "SetParent",
+        "ValType": "Integer",
+        "Enum": []
+      },
+      {
+        "Action": "SetAsso",
+        "ValType": "Integer",
+        "Enum": []
+      },
+      {
+        "Action": "SetLinkMode",
+        "ValType": "Boolean",
+        "Enum": []
+      },
+      {
+        "Action": "SetIdentify",
+        "ValType": "Boolean",
+        "Enum": []
+      },
+      {
+        "Action": "Reboot",
+        "ValType": "None",
+        "Enum": []
+      },
+      {
+        "Action": "ResetConfig",
+        "ValType": "None",
+        "Enum": []
+      }
+    ]
+  }
+  
