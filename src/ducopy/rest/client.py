@@ -1,8 +1,10 @@
 from pydantic import HttpUrl
 from ducopy.rest.models import ActionsResponse, ConfigNodeResponse, NodeInfo, NodesResponse
 from ducopy.rest.utils import DucoUrlSession
-from pathlib import Path
 from loguru import logger
+
+import importlib.resources as pkg_resources
+from ducopy import certs
 
 
 class APIClient:
@@ -13,9 +15,10 @@ class APIClient:
 
     def _duco_pem(self) -> str:
         """Enable certificate pinning."""
-        pemfile = Path(__file__).resolve().parent.parent.parent.parent / "certs" / "api_cert.pem"
-        logger.debug("Using certificate at path: {}", pemfile)
-        return str(pemfile.absolute())
+        pem_path = pkg_resources.files(certs).joinpath("api_cert.pem")
+        logger.debug("Using certificate at path: {}", pem_path)
+
+        return str(pem_path)
 
     def get_api_info(self) -> dict:
         """Fetch API version and available endpoints."""

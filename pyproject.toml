@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ducopy"
-version = "1.0.0"  # Adjust as needed
+version = "3"  # Adjust as needed
 description = "A brief description of your app"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,7 @@ dependencies = [
     "requests<3,==2.31.0",
     "loguru<1,>=0.7.2",
     "typer>=0.12.5,<1",
+    "rich>=13.9.4,<14",
 ]
 
 [project.optional-dependencies]
@@ -34,11 +35,25 @@ dev = [
     "Flask>=2.3.3,<3",
     "ruff>=0.7.2,<1",
     "pre-commit>=4.0.1,<5",
-    "pytest>=6.0"
+    "pytest>=6.0",
+]
+build = [
+    "build", 
+    "twine",
+    "pytest>=7.4.0,<8",
+    "requests-mock>=1.11.0,<2",
+    "pytest-cov>=4.1.0,<5",
+    "flake8>=6.1.0,<7",
+    "black>=23.9.1,<24",
+    "mypy>=1.6.0,<2",
+    "Flask>=2.3.3,<3",
+    "ruff>=0.7.2,<1",
+    "pre-commit>=4.0.1,<5",
+    "pytest>=6.0",
 ]
 
 [project.scripts]
-ducopy = "ducopy.cli:main"
+ducopy = "ducopy.cli:entry_point"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
