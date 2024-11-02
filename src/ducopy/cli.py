@@ -1,12 +1,12 @@
+from pydantic import BaseModel, HttpUrl, ValidationError
 import typer
+from loguru import logger
+import json
 import sys
 from typing import Any, Annotated
-from pydantic import HttpUrl, ValidationError, BaseModel
-from loguru import logger
 from ducopy.ducopy import DucoPy
 from rich import print as rich_print
 from rich.pretty import Pretty
-import json
 
 app = typer.Typer(no_args_is_help=True)  # Show help if no command is provided
 
@@ -17,21 +17,25 @@ def setup_logging(level: str) -> None:
     logger.add(sink=sys.stderr, level=level.upper())  # Add a new handler with the specified level
 
 
+class URLModel(BaseModel):
+    url: HttpUrl
+
+
 def validate_url(url: str) -> str:
     """Validate the provided URL as an HttpUrl."""
     try:
-        url = HttpUrl(url)
+        # Use a Pydantic model to validate the URL
+        validated_url = URLModel(url=url).url
     except ValidationError:
         typer.echo(f"Invalid URL: {url}")
         raise typer.Exit(code=1)
-
-    return str(url)
+    return str(validated_url)
 
 
 def print_output(data: Any, format: str) -> None:  # noqa: ANN401
     """Print output in the specified format."""
     if isinstance(data, BaseModel):  # Check if data is a Pydantic model instance
-        data = data.model_dump(mode="json")  # Use model_dump for JSON serialization
+        data = data.dict()  # Use `.dict()` for JSON serialization
 
     if format == "json":
         typer.echo(json.dumps(data, indent=4))

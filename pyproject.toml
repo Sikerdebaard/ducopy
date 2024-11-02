@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ducopy"
-version = "4"  # Adjust as needed
-description = "A brief description of your app"
+version = "5"  # Adjust as needed
+description = "DucoPy: A Python library and CLI for full control over DucoBox ventilation units with a Connectivity Board. Retrieve system info, manage configurations, control nodes, and monitor logs easily from your Python environment or command line. "
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "Thomas Phil", email = "thomas@tphil.nl"}]
@@ -17,8 +17,8 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 dependencies = [
-    "pydantic<3,>=2.9",
-    "requests<3,>=2.10.0",
+    "pydantic>=1.10.17,<2",
+    "requests>=2.32.3,<3",
     "loguru<1,>=0.7.2",
     "typer>=0.12.5,<1",
     "rich>=13.9.4,<14",

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, root_validator
 from typing import Literal
 
 
@@ -19,7 +19,7 @@ class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
     Addr: int = Field(...)
 
-    @model_validator(mode="before")
+    @root_validator(pre=True)
     def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["Addr"] = extract_val(values.get("Addr", {}))
         return values
@@ -28,7 +28,7 @@ class NodeGeneralInfo(BaseModel):
 class NetworkDucoInfo(BaseModel):
     CommErrorCtr: int = Field(...)
 
-    @model_validator(mode="before")
+    @root_validator(pre=True)
     def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
         return values
@@ -38,7 +38,7 @@ class VentilationInfo(BaseModel):
     State: GeneralInfo
     FlowLvlOvrl: int = Field(...)
 
-    @model_validator(mode="before")
+    @root_validator(pre=True)
     def validate_flow_lvl_ovrl(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["FlowLvlOvrl"] = extract_val(values.get("FlowLvlOvrl", {}))
         return values
@@ -64,7 +64,7 @@ class ConfigNodeResponse(BaseModel):
     FlowLvlMan1: dict[str, int] | None
     Name: str | None
 
-    @model_validator(mode="before")
+    @root_validator(pre=True)
     def validate_name(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["Name"] = extract_val(values.get("Name", {}))
         return values
@@ -80,7 +80,7 @@ class ActionInfo(BaseModel):
     ValType: Literal["Enum", "Integer", "Boolean", "None"]
     Enum: list[str] | None  # Keep Enum optional
 
-    @model_validator(mode="before")
+    @root_validator(pre=True)
     def set_optional_enum(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":

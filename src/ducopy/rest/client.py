@@ -28,7 +28,7 @@ class APIClient:
         logger.debug("Received API information")
         return response.json()
 
-    def get_info(self, module: str | None = None, submodule: str | None = None, parameter: str | None = None) -> dict:
+    def get_info(self, module: str = None, submodule: str = None, parameter: str = None) -> dict:
         """Fetch general API information."""
         params = {k: v for k, v in {"module": module, "submodule": submodule, "parameter": parameter}.items() if v}
         logger.info("Fetching info with parameters: {}", params)
@@ -43,7 +43,7 @@ class APIClient:
         response = self.session.get("/info/nodes")
         response.raise_for_status()
         logger.debug("Received nodes data")
-        return NodesResponse.model_validate(response.json())
+        return NodesResponse(**response.json())  # Direct instantiation for Pydantic 1.x
 
     def get_node_info(self, node_id: int) -> NodeInfo:
         """Retrieve detailed information for a specific node."""
@@ -51,7 +51,7 @@ class APIClient:
         response = self.session.get(f"/info/nodes/{node_id}")
         response.raise_for_status()
         logger.debug("Received node info for node ID: {}", node_id)
-        return NodeInfo.model_validate(response.json())
+        return NodeInfo(**response.json())  # Direct instantiation for Pydantic 1.x
 
     def get_config_node(self, node_id: int) -> ConfigNodeResponse:
         """Retrieve configuration settings for a specific node."""
@@ -59,9 +59,9 @@ class APIClient:
         response = self.session.get(f"/config/nodes/{node_id}")
         response.raise_for_status()
         logger.debug("Received config for node ID: {}", node_id)
-        return ConfigNodeResponse.model_validate(response.json())
+        return ConfigNodeResponse(**response.json())  # Direct instantiation for Pydantic 1.x
 
-    def get_action(self, action: str | None = None) -> dict:
+    def get_action(self, action: str = None) -> dict:
         """Retrieve action data."""
         logger.info("Fetching action data for action: {}", action)
         params = {"action": action} if action else {}
@@ -70,14 +70,14 @@ class APIClient:
         logger.debug("Received action data for action: {}", action)
         return response.json()
 
-    def get_actions_node(self, node_id: int, action: str | None = None) -> ActionsResponse:
+    def get_actions_node(self, node_id: int, action: str = None) -> ActionsResponse:
         """Retrieve available actions for a specific node."""
         logger.info("Fetching actions for node ID: {} with action filter: {}", node_id, action)
         params = {"action": action} if action else {}
         response = self.session.get(f"/action/nodes/{node_id}", params=params)
         response.raise_for_status()
         logger.debug("Received actions for node ID: {}", node_id)
-        return ActionsResponse.model_validate(response.json())
+        return ActionsResponse(**response.json())  # Direct instantiation for Pydantic 1.x
 
     def get_logs(self) -> dict:
         """Retrieve API logs."""
