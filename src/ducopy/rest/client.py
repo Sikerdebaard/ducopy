@@ -20,7 +20,7 @@ class APIClient:
     def get_api_info(self) -> dict:
         """Fetch API version and available endpoints."""
         logger.info("Fetching API information")
-        response = self.session.get(f"{self.base_url}/api")
+        response = self.session.get("/api")
         response.raise_for_status()
         logger.debug("Received API information")
         return response.json()
@@ -29,7 +29,7 @@ class APIClient:
         """Fetch general API information."""
         params = {k: v for k, v in {"module": module, "submodule": submodule, "parameter": parameter}.items() if v}
         logger.info("Fetching info with parameters: {}", params)
-        response = self.session.get(f"{self.base_url}/info", params=params)
+        response = self.session.get("/info", params=params)
         response.raise_for_status()
         logger.debug("Received general info")
         return response.json()
@@ -37,7 +37,7 @@ class APIClient:
     def get_nodes(self) -> NodesResponse:
         """Retrieve list of all nodes."""
         logger.info("Fetching list of all nodes")
-        response = self.session.get(f"{self.base_url}/info/nodes")
+        response = self.session.get("/info/nodes")
         response.raise_for_status()
         logger.debug("Received nodes data")
         return NodesResponse.model_validate(response.json())
@@ -45,7 +45,7 @@ class APIClient:
     def get_node_info(self, node_id: int) -> NodeInfo:
         """Retrieve detailed information for a specific node."""
         logger.info("Fetching info for node ID: {}", node_id)
-        response = self.session.get(f"{self.base_url}/info/nodes/{node_id}")
+        response = self.session.get(f"/info/nodes/{node_id}")
         response.raise_for_status()
         logger.debug("Received node info for node ID: {}", node_id)
         return NodeInfo.model_validate(response.json())
@@ -53,7 +53,7 @@ class APIClient:
     def get_config_node(self, node_id: int) -> ConfigNodeResponse:
         """Retrieve configuration settings for a specific node."""
         logger.info("Fetching configuration for node ID: {}", node_id)
-        response = self.session.get(f"{self.base_url}/config/nodes/{node_id}")
+        response = self.session.get(f"/config/nodes/{node_id}")
         response.raise_for_status()
         logger.debug("Received config for node ID: {}", node_id)
         return ConfigNodeResponse.model_validate(response.json())
@@ -62,7 +62,7 @@ class APIClient:
         """Retrieve action data."""
         logger.info("Fetching action data for action: {}", action)
         params = {"action": action} if action else {}
-        response = self.session.get(f"{self.base_url}/action", params=params)
+        response = self.session.get("/action", params=params)
         response.raise_for_status()
         logger.debug("Received action data for action: {}", action)
         return response.json()
@@ -71,7 +71,7 @@ class APIClient:
         """Retrieve available actions for a specific node."""
         logger.info("Fetching actions for node ID: {} with action filter: {}", node_id, action)
         params = {"action": action} if action else {}
-        response = self.session.get(f"{self.base_url}/action/nodes/{node_id}", params=params)
+        response = self.session.get(f"/action/nodes/{node_id}", params=params)
         response.raise_for_status()
         logger.debug("Received actions for node ID: {}", node_id)
         return ActionsResponse.model_validate(response.json())
@@ -79,7 +79,7 @@ class APIClient:
     def get_logs(self) -> dict:
         """Retrieve API logs."""
         logger.info("Fetching API logs")
-        response = self.session.get(f"{self.base_url}/log/api")
+        response = self.session.get("/log/api")
         response.raise_for_status()
         logger.debug("Received API logs")
         return response.json()
