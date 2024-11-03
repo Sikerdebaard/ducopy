@@ -43,18 +43,17 @@ class DucoUrlSession(requests.Session):
         super().__init__()
         self.base_url = base_url
 
-        # Configure SSLContext to ignore hostname verification
-        ssl_context = ssl.create_default_context()
-
         if isinstance(verify, str):
+            # Configure SSLContext to ignore hostname verification
+            ssl_context = ssl.create_default_context()
             ssl_context.load_verify_locations(verify)
             self.verify = True
+
+            # Mount adapter with SSLContext to the session
+            adapter = CustomHostNameCheckingAdapter(ssl_context, custom_host_mapping)
+            self.mount("https://", adapter)
         else:
             self.verify = verify
-
-        # Mount adapter with SSLContext to the session
-        adapter = CustomHostNameCheckingAdapter(ssl_context, custom_host_mapping)
-        self.mount("https://", adapter)
 
         self.api_key: str | None = None
         self.api_key_timestamp: float = 0.0
