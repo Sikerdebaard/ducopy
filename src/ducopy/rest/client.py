@@ -8,9 +8,12 @@ from ducopy import certs
 
 
 class APIClient:
-    def __init__(self, base_url: HttpUrl) -> None:
+    def __init__(self, base_url: HttpUrl, verify: bool = True) -> None:
         self.base_url = base_url
-        self.session = DucoUrlSession(base_url, verify=self._duco_pem())
+        if verify:
+            self.session = DucoUrlSession(base_url, verify=self._duco_pem())
+        else:
+            self.session = DucoUrlSession(base_url, verify=verify)
         logger.info("APIClient initialized with base URL: {}", base_url)
 
     def _duco_pem(self) -> str:

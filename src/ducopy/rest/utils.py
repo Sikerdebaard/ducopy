@@ -26,7 +26,8 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
     def cert_verify(self, conn: requests.adapters.HTTPAdapter, url: str, verify: bool, cert: str | None) -> None:
-        conn.assert_hostname = self.hostname_resolver(url)
+        # conn.assert_hostname = self.hostname_resolver(url)
+        conn.assert_hostname = False
         return super().cert_verify(conn, url, verify, cert)
 
 
