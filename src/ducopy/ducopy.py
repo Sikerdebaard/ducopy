@@ -4,8 +4,8 @@ from pydantic import HttpUrl
 
 
 class DucoPy:
-    def __init__(self, base_url: HttpUrl) -> None:
-        self.client = APIClient(base_url)
+    def __init__(self, base_url: HttpUrl, verify: bool = True) -> None:
+        self.client = APIClient(base_url, verify)
 
     def get_api_info(self) -> dict:
         return self.client.get_api_info()
