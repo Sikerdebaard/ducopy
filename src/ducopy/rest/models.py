@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, root_validator
-from typing import Literal
+from typing import Literal, Any
 
 
 # Helper function to extract `Val` from nested dictionaries
@@ -44,11 +44,24 @@ class VentilationInfo(BaseModel):
         return values
 
 
+class SensorData(BaseModel):
+    """Dynamically captures any sensor data using a dictionary."""
+
+    data: dict[str, int | float | str] = Field(default_factory=dict)
+
+    @root_validator(pre=True)
+    def extract_sensor_values(cls, values: dict[str, Any]) -> dict[str, Any]:
+        # Iterate over all fields and extract their `Val` if they have it
+        values["data"] = {key: extract_val(value) for key, value in values.items()}
+        return values
+
+
 class NodeInfo(BaseModel):
     Node: int
     General: NodeGeneralInfo
     NetworkDuco: NetworkDucoInfo | None
     Ventilation: VentilationInfo | None
+    Sensor: SensorData | None  # Dynamic handling of any sensor data
 
 
 class NodesResponse(BaseModel):

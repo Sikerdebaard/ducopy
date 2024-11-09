@@ -57,4 +57,6 @@ class ApiKeyGenerator:
                 key_template[idx + 2] = self.transform_char(key_template[idx], key_template[idx + 1])
                 key_template[idx + 3] = self.transform_char(key_template[idx + 1], key_template[idx + 2])
 
+        print("".join(key_template))
+
         return "".join(key_template)
