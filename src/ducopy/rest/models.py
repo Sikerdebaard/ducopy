@@ -35,17 +35,38 @@ class NetworkDucoInfo(BaseModel):
 
 
 class VentilationInfo(BaseModel):
-    State: GeneralInfo
+    State: str | None = None
     FlowLvlOvrl: int = Field(...)
+    TimeStateRemain: int | None = None
+    TimeStateEnd: int | None = None
+    Mode: str | None = None
+    FlowLvlTgt: int | None = None
 
     @root_validator(pre=True)
-    def validate_flow_lvl_ovrl(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["FlowLvlOvrl"] = extract_val(values.get("FlowLvlOvrl", {}))
+    def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+        fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "State"]
+
+        # Define keyword mappings for transformations
+        time_fields = [field for field in values if "time" in field.lower()]
+        replace_dash_fields = ["Mode", "State"]
+
+        # Extract `Val` from each optional field if it exists
+        for field in fields_to_extract:
+            if field in values:
+                val = extract_val(values[field])
+                # Replace 0 with None for 'time' fields
+                if field in time_fields and val == 0:
+                    values[field] = None
+                # Replace '-' with None for fields like Mode and State
+                elif field in replace_dash_fields and val == "-":
+                    values[field] = None
+                else:
+                    values[field] = val
         return values
 
 
 class SensorData(BaseModel):
-    """Dynamically captures any sensor data using a dictionary."""
+    """Dynamically captures sensor data, including environmental sensors."""
 
     data: dict[str, int | float | str] = Field(default_factory=dict)
 
@@ -61,7 +82,7 @@ class NodeInfo(BaseModel):
     General: NodeGeneralInfo
     NetworkDuco: NetworkDucoInfo | None
     Ventilation: VentilationInfo | None
-    Sensor: SensorData | None  # Dynamic handling of any sensor data
+    Sensor: SensorData | None  # Includes environmental and other sensor data
 
 
 class NodesResponse(BaseModel):
