@@ -46,7 +46,6 @@ class APIClient:
         response = self.session.get("/info/nodes")
         response.raise_for_status()
         logger.debug("Received nodes data")
-        print(response.json())
         return NodesResponse(**response.json())  # Direct instantiation for Pydantic 1.x
 
     def get_node_info(self, node_id: int) -> NodeInfo:
