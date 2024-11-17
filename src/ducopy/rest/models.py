@@ -49,7 +49,7 @@ class NodesResponse(BaseModel):
 
 
 class GeneralInfo(BaseModel):
-    Id: int
+    Id: int | None = None
     Val: str
 
 

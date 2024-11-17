@@ -1,7 +1,6 @@
 {
-    "Node": 1,
-    "SerialBoard": "MOCKSERIAL123456",
-    "FlowLvlMan1": { "Id": 196614, "Val": 30, "Min": 0, "Max": 50 },
-    "Name": "Mock Node"
-  }
-  
+  "Node": 1,
+  "SerialBoard": "MOCKSERIAL123456",
+  "FlowLvlMan1": { "Id": 196614, "Val": 30, "Min": 0, "Max": 50 },
+  "Name": { "Id": 196615, "Val": "Mock Node" }
+}
