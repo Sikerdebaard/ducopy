@@ -3,7 +3,7 @@ import requests_mock
 import json
 from typing import Any
 from ducopy.rest.client import APIClient
-from ducopy.rest.models import NodesResponse, NodeInfo, ConfigNodeResponse, ActionsResponse
+from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse
 
 BASE_URL = "http://localhost:5000"
 
@@ -50,8 +50,8 @@ def test_get_nodes(client: APIClient, mock_requests: requests_mock.Mocker) -> No
     mock_data = load_mock_data("nodes.json")
     mock_requests.get(f"{BASE_URL}/info/nodes", json=mock_data)
 
-    nodes_response = NodesResponse(**mock_data)  # Instantiate NodesResponse directly with data
-    assert isinstance(nodes_response, NodesResponse)
+    nodes_response = NodesInfoResponse(**mock_data)  # Instantiate NodesInfoResponse directly with data
+    assert isinstance(nodes_response, NodesInfoResponse)
     assert len(nodes_response.Nodes) == len(mock_data["Nodes"])
 
 

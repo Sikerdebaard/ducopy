@@ -1,7 +1,7 @@
 import os
 import pytest
 from ducopy.rest.client import APIClient
-from ducopy.rest.models import NodesResponse, NodeInfo, ConfigNodeResponse, ActionsResponse
+from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse
 
 
 @pytest.fixture(scope="module")
@@ -45,14 +45,14 @@ def test_get_api_info_insecure(client_insecure: APIClient) -> None:
 def test_get_nodes(client: APIClient) -> None:
     """Test fetching nodes with SSL verification."""
     nodes_response = client.get_nodes()
-    assert isinstance(nodes_response, NodesResponse), "Expected NodesResponse instance"
+    assert isinstance(nodes_response, NodesInfoResponse), "Expected NodesResponse instance"
     assert nodes_response.Nodes, "Nodes response should contain nodes"
 
 
 def test_get_nodes_insecure(client_insecure: APIClient) -> None:
     """Test fetching nodes without SSL verification."""
     nodes_response = client_insecure.get_nodes()
-    assert isinstance(nodes_response, NodesResponse), "Expected NodesResponse instance"
+    assert isinstance(nodes_response, NodesInfoResponse), "Expected NodesResponse instance"
     assert nodes_response.Nodes, "Nodes response should contain nodes"
 
 

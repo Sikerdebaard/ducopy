@@ -6,6 +6,7 @@ from ducopy.rest.models import (
     ConfigNodeResponse,
     ConfigNodeRequest,
     ParameterConfig,
+    NodesInfoResponse,
 )
 from ducopy.rest.utils import DucoUrlSession
 from loguru import logger
@@ -151,13 +152,13 @@ class APIClient:
         logger.debug("Received general info")
         return response.json()
 
-    def get_nodes(self) -> NodesResponse:
+    def get_nodes(self) -> NodesInfoResponse:
         """Retrieve list of all nodes."""
         logger.info("Fetching list of all nodes")
         response = self.session.get("/info/nodes")
         response.raise_for_status()
         logger.debug("Received nodes data")
-        return NodesResponse(**response.json())  # Direct instantiation for Pydantic 1.x
+        return NodesInfoResponse(**response.json())
 
     def get_node_info(self, node_id: int) -> NodeInfo:
         """Retrieve detailed information for a specific node."""

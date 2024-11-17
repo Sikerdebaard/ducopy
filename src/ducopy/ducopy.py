@@ -1,5 +1,12 @@
 from ducopy.rest.client import APIClient
-from ducopy.rest.models import NodesResponse, NodeInfo, ConfigNodeResponse, ActionsResponse, ConfigNodeRequest
+from ducopy.rest.models import (
+    NodesResponse,
+    NodeInfo,
+    ConfigNodeResponse,
+    ActionsResponse,
+    ConfigNodeRequest,
+    NodesInfoResponse,
+)
 from pydantic import HttpUrl
 
 
@@ -19,7 +26,7 @@ class DucoPy:
     def get_info(self, module: str | None = None, submodule: str | None = None, parameter: str | None = None) -> dict:
         return self.client.get_info(module=module, submodule=submodule, parameter=parameter)
 
-    def get_nodes(self) -> NodesResponse:
+    def get_nodes(self) -> NodesInfoResponse:
         return self.client.get_nodes()
 
     def get_node_info(self, node_id: int) -> NodeInfo:

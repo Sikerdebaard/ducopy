@@ -123,6 +123,10 @@ class NodeInfo(BaseModel):
     Sensor: SensorData | None  # Includes environmental and other sensor data
 
 
+class NodesInfoResponse(BaseModel):
+    Nodes: list[NodeInfo]
+
+
 # ConfigNodeResponse for specific node configuration
 class ConfigNodeResponse(BaseModel):
     Node: int

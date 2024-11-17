@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ducopy"
-version = "12"  # Adjust as needed
+version = "13"  # Adjust as needed
 description = "DucoPy: A Python library and CLI for full control over DucoBox ventilation units with a Connectivity Board. Retrieve system info, manage configurations, control nodes, and monitor logs easily from your Python environment or command line. "
 readme = "README.md"
 requires-python = ">=3.10"
