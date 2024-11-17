@@ -7,6 +7,9 @@ from typing import Any, Annotated
 from ducopy.ducopy import DucoPy
 from rich import print as rich_print
 from rich.pretty import Pretty
+from urllib.parse import urlparse
+
+from ducopy.rest.models import ConfigNodeRequest
 
 app = typer.Typer(no_args_is_help=True)  # Show help if no command is provided
 
@@ -51,6 +54,100 @@ def configure(
 ) -> None:
     """CLI client for interacting with DucoPy."""
     setup_logging(logging_level)
+
+
+@app.command()
+def raw_get(
+    url: str,
+    params: Annotated[str, typer.Option(help="Query parameters as a JSON string", default="{}")] = "{}",
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+) -> None:
+    """
+    Perform a raw GET request to a specified URL.
+
+    Args:
+        url (str): Full URL of the API endpoint (e.g., "https://api.example.com/api").
+        params (str): Query parameters as a JSON string (e.g., '{"key": "value"}').
+        format (str): Output format: pretty or json.
+    """
+    url = validate_url(url)
+    parsed_url = urlparse(url)
+    base_url = (
+        f"{parsed_url.scheme}://{parsed_url.netloc}"  # Extract scheme and netloc (e.g., "https://api.example.com")
+    )
+    endpoint = parsed_url.path  # Extract the path (e.g., "/api/resource")
+
+    try:
+        # Parse the params JSON string into a dictionary
+        query_params = json.loads(params)
+    except json.JSONDecodeError:
+        typer.echo("Invalid JSON string for query parameters.")
+        raise typer.Exit(code=1)
+
+    facade = DucoPy(base_url)
+    try:
+        response = facade.raw_get(endpoint=endpoint, params=query_params)
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error performing raw GET request: {}", str(e))
+        typer.echo(f"Failed to perform raw GET request: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def update_config_node(
+    base_url: str,
+    node_id: int,
+    config_json: Annotated[str, typer.Option(help="Configuration parameters as a JSON string")],
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+) -> None:
+    """
+    Update configuration settings for a specific node.
+
+    Args:
+        base_url (str): The base URL of the API.
+        node_id (int): The ID of the node to update.
+        config_json (str): Configuration parameters as a JSON string.
+        format (str): Output format: pretty or json.
+    """
+    base_url = validate_url(base_url)
+    facade = DucoPy(base_url)
+    try:
+        config_data = json.loads(config_json)
+        config = ConfigNodeRequest(**config_data)
+    except (json.JSONDecodeError, ValidationError) as e:
+        logger.error("Invalid configuration data: {}", e)
+        typer.echo(f"Invalid configuration data: {e}")
+        raise typer.Exit(code=1)
+    try:
+        response = facade.update_config_node(node_id=node_id, config=config)
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error updating configuration for node {}: {}", node_id, e)
+        typer.echo(f"Failed to update configuration for node {node_id}: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def get_config_nodes(
+    base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+) -> None:
+    """
+    Retrieve configuration settings for all nodes.
+
+    Args:
+        base_url (str): The base URL of the API.
+        format (str): Output format: pretty or json.
+    """
+    base_url = validate_url(base_url)
+    facade = DucoPy(base_url)
+    try:
+        response = facade.get_config_nodes()
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error fetching configuration for all nodes: {}", str(e))
+        typer.echo(f"Failed to fetch configuration for all nodes: {e}")
+        raise typer.Exit(code=1)
 
 
 @app.command()

@@ -1,11 +1,17 @@
 from ducopy.rest.client import APIClient
-from ducopy.rest.models import NodesResponse, NodeInfo, ConfigNodeResponse, ActionsResponse
+from ducopy.rest.models import NodesResponse, NodeInfo, ConfigNodeResponse, ActionsResponse, ConfigNodeRequest
 from pydantic import HttpUrl
 
 
 class DucoPy:
     def __init__(self, base_url: HttpUrl, verify: bool = True) -> None:
         self.client = APIClient(base_url, verify)
+
+    def raw_get(self, endpoint: str, params: dict = None) -> dict:
+        return self.client.raw_get(endpoint=endpoint, params=params)
+
+    def update_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
+        return self.client.patch_config_node(node_id=node_id, config=config)
 
     def get_api_info(self) -> dict:
         return self.client.get_api_info()
@@ -21,6 +27,9 @@ class DucoPy:
 
     def get_config_node(self, node_id: int) -> ConfigNodeResponse:
         return self.client.get_config_node(node_id=node_id)
+
+    def get_config_nodes(self) -> NodesResponse:
+        return self.client.get_config_nodes()
 
     def get_action(self, action: str | None = None) -> dict:
         return self.client.get_action(action=action)

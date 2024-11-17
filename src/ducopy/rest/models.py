@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, root_validator
-from typing import Literal, Any
+from typing import Any, Literal
 
 
 # Helper function to extract `Val` from nested dictionaries
@@ -9,7 +9,45 @@ def extract_val(data: dict | str | int) -> str | int | dict:
     return data
 
 
-# Define models with conditional validation for optional fields
+class ParameterConfig(BaseModel):
+    Id: int
+    Val: int | str
+    Min: int | None = None
+    Max: int | None = None
+    Inc: int | None = None
+
+    @root_validator(pre=True)
+    def ensure_keys(cls, values: dict) -> dict:
+        # Ensure all expected keys are present, set to None if not
+        keys = ["Id", "Val", "Min", "Max", "Inc"]
+        return {key: values.get(key) for key in keys}
+
+
+class NodeConfig(BaseModel):
+    Node: int
+    SerialBoard: str = Field(default="n/a")
+    SerialDuco: str = Field(default="n/a")
+    FlowLvlAutoMin: ParameterConfig | None = None
+    FlowLvlAutoMax: ParameterConfig | None = None
+    FlowMax: ParameterConfig | None = None
+    FlowLvlMan1: ParameterConfig | None = None
+    FlowLvlMan2: ParameterConfig | None = None
+    FlowLvlMan3: ParameterConfig | None = None
+    TimeMan: ParameterConfig | None = None
+    Co2SetPoint: ParameterConfig | None = None
+    RhSetPoint: ParameterConfig | None = None
+    RhDetMode: ParameterConfig | None = None
+    TempDepEnable: ParameterConfig | None = None
+    ShowSensorLvl: ParameterConfig | None = None
+    SwitchMode: ParameterConfig | None = None
+    FlowLvlSwitch: ParameterConfig | None = None
+    Name: ParameterConfig | None = None
+
+
+class NodesResponse(BaseModel):
+    Nodes: list[NodeConfig]
+
+
 class GeneralInfo(BaseModel):
     Id: int
     Val: str
@@ -85,23 +123,44 @@ class NodeInfo(BaseModel):
     Sensor: SensorData | None  # Includes environmental and other sensor data
 
 
-class NodesResponse(BaseModel):
-    Nodes: list[NodeInfo]
+# ConfigNodeResponse for specific node configuration
+class ConfigNodeResponse(BaseModel):
+    Node: int
+    SerialBoard: str = Field(default="n/a")
+    SerialDuco: str = Field(default="n/a")
+    FlowLvlAutoMin: ParameterConfig | None = None
+    FlowLvlAutoMax: ParameterConfig | None = None
+    FlowMax: ParameterConfig | None = None
+    FlowLvlMan1: ParameterConfig | None = None
+    FlowLvlMan2: ParameterConfig | None = None
+    FlowLvlMan3: ParameterConfig | None = None
+    TimeMan: ParameterConfig | None = None
+    Co2SetPoint: ParameterConfig | None = None
+    RhSetPoint: ParameterConfig | None = None
+    RhDetMode: ParameterConfig | None = None
+    TempDepEnable: ParameterConfig | None = None
+    ShowSensorLvl: ParameterConfig | None = None
+    SwitchMode: ParameterConfig | None = None
+    FlowLvlSwitch: ParameterConfig | None = None
+    Name: ParameterConfig | None = None
 
 
 class ConfigNodeRequest(BaseModel):
-    Name: str | None
-
-
-class ConfigNodeResponse(BaseModel):
-    Node: int
-    FlowLvlMan1: dict[str, int] | None
-    Name: str | None
-
-    @root_validator(pre=True)
-    def validate_name(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["Name"] = extract_val(values.get("Name", {}))
-        return values
+    Name: str | None = None
+    FlowLvlAutoMin: int | None = None
+    FlowLvlAutoMax: int | None = None
+    FlowMax: int | None = None
+    FlowLvlMan1: int | None = None
+    FlowLvlMan2: int | None = None
+    FlowLvlMan3: int | None = None
+    TimeMan: int | None = None
+    Co2SetPoint: int | None = None
+    RhSetPoint: int | None = None
+    RhDetMode: int | None = None
+    TempDepEnable: int | None = None
+    ShowSensorLvl: int | None = None
+    SwitchMode: int | None = None
+    FlowLvlSwitch: int | None = None
 
 
 class FirmwareResponse(BaseModel):
