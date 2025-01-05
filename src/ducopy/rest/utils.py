@@ -120,13 +120,18 @@ class DucoUrlSession(requests.Session):
     ) -> requests.Response:
         """
         Sends a request, automatically prepending the base URL to the given URL if it's relative.
+        Implements an exponential backoff retry strategy (up to 5 attempts) on request failures.
 
         Args:
             method (str): The HTTP method for the request (e.g., 'GET', 'POST').
             url (str): The relative or absolute URL path for the request.
+            ensure_apikey (bool): Whether to automatically ensure an API key is present/valid.
 
         Returns:
             Response: The HTTP response from the server.
+
+        Raises:
+            requests.RequestException: If all retry attempts fail or another request-related error occurs.
         """
         if ensure_apikey:
             self._ensure_apikey()
@@ -137,12 +142,25 @@ class DucoUrlSession(requests.Session):
 
         kwargs.setdefault("verify", self.verify)
 
-        logger.debug("Sending {} request to URL: {}", method.upper(), url)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.debug(
+                    "Sending {} request to URL: {} (attempt {}/{})", method.upper(), url, attempt + 1, max_retries
+                )
 
-        try:
-            response = super().request(method, url, *args, **kwargs)
-            logger.info("Received {} response from {}", response.status_code, url)
-            return response
-        except requests.RequestException as e:
-            logger.error("Request to {} failed with error: {}", url, e)
-            raise
+                response = super().request(method, url, *args, **kwargs)
+                logger.info("Received {} response from {}", response.status_code, url)
+                return response
+
+            except requests.RequestException as e:
+                logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, e)
+
+                # If not on the last attempt, wait (2^attempt seconds), then retry
+                if attempt < max_retries - 1:
+                    backoff_time = 2**attempt
+                    logger.warning("Retrying in {} seconds...", backoff_time)
+                    time.sleep(backoff_time)
+                else:
+                    # After exhausting all retries, raise the exception
+                    raise
