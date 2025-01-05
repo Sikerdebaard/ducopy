@@ -1,12 +1,4 @@
 from ducopy.rest.client import APIClient
-from ducopy.rest.models import (
-    NodesResponse,
-    NodeInfo,
-    ConfigNodeResponse,
-    ActionsResponse,
-    ConfigNodeRequest,
-    NodesInfoResponse,
-)
 from pydantic import HttpUrl
 
 
@@ -17,8 +9,8 @@ class DucoPy:
     def raw_get(self, endpoint: str, params: dict = None) -> dict:
         return self.client.raw_get(endpoint=endpoint, params=params)
 
-    def update_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
-        return self.client.patch_config_node(node_id=node_id, config=config)
+    # def update_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
+    #     return self.client.patch_config_node(node_id=node_id, config=config)
 
     def get_api_info(self) -> dict:
         return self.client.get_api_info()
@@ -26,22 +18,22 @@ class DucoPy:
     def get_info(self, module: str | None = None, submodule: str | None = None, parameter: str | None = None) -> dict:
         return self.client.get_info(module=module, submodule=submodule, parameter=parameter)
 
-    def get_nodes(self) -> NodesInfoResponse:
+    def get_nodes(self) -> dict:
         return self.client.get_nodes()
 
-    def get_node_info(self, node_id: int) -> NodeInfo:
+    def get_node_info(self, node_id: int) -> dict:
         return self.client.get_node_info(node_id=node_id)
 
-    def get_config_node(self, node_id: int) -> ConfigNodeResponse:
+    def get_config_node(self, node_id: int) -> dict:
         return self.client.get_config_node(node_id=node_id)
 
-    def get_config_nodes(self) -> NodesResponse:
+    def get_config_nodes(self) -> dict:
         return self.client.get_config_nodes()
 
     def get_action(self, action: str | None = None) -> dict:
         return self.client.get_action(action=action)
 
-    def get_actions_node(self, node_id: int, action: str | None = None) -> ActionsResponse:
+    def get_actions_node(self, node_id: int, action: str | None = None) -> dict:
         return self.client.get_actions_node(node_id=node_id, action=action)
 
     def get_logs(self) -> dict:

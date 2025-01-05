@@ -77,6 +77,8 @@ class DucoUrlSession(requests.Session):
             self.api_key = apigen.generate_api_key(ducoserial, ducomac, ducotime)
             self.api_key_timestamp = time.time()
 
+            logger.debug(f"Using Api-Key: {self.api_key}")
+
             self.headers.update({"Api-Key": self.api_key})
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 

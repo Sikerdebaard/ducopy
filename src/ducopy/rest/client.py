@@ -1,13 +1,4 @@
 from pydantic import HttpUrl
-from ducopy.rest.models import (
-    ActionsResponse,
-    NodeInfo,
-    NodesResponse,
-    ConfigNodeResponse,
-    ConfigNodeRequest,
-    ParameterConfig,
-    NodesInfoResponse,
-)
 from ducopy.rest.utils import DucoUrlSession
 from loguru import logger
 
@@ -48,80 +39,80 @@ class APIClient:
         logger.debug("Received response for raw GET request to endpoint: {}", endpoint)
         return response.json()
 
-    def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
-        """
-        Update configuration settings for a specific node after validating the new values.
+    # def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
+    #     """
+    #     Update configuration settings for a specific node after validating the new values.
 
-        Args:
-            node_id (int): The ID of the node to update.
-            config (ConfigNodeRequest): The configuration data to update.
+    #     Args:
+    #         node_id (int): The ID of the node to update.
+    #         config (ConfigNodeRequest): The configuration data to update.
 
-        Returns:
-            ConfigNodeResponse: The updated configuration response from the server.
-        """
-        logger.info("Updating configuration for node ID: {}", node_id)
+    #     Returns:
+    #         ConfigNodeResponse: The updated configuration response from the server.
+    #     """
+    #     logger.info("Updating configuration for node ID: {}", node_id)
 
-        # Fetch current configuration of the node
-        current_config_response = self.get_config_node(node_id)
-        current_config = current_config_response.dict()
+    #     # Fetch current configuration of the node
+    #     current_config_response = self.get_config_node(node_id)
+    #     current_config = current_config_response.dict()
 
-        # Validation logic (same as before)
-        validation_errors = []
-        for field, new_value in config.dict(exclude_unset=True).items():
-            # Get current parameter configuration
-            param_config_data = current_config.get(field)
-            if param_config_data is None:
-                error_message = f"Parameter '{field}' not available for node {node_id}."
-                logger.error(error_message)
-                validation_errors.append(error_message)
-                continue
+    #     # Validation logic (same as before)
+    #     validation_errors = []
+    #     for field, new_value in config.dict(exclude_unset=True).items():
+    #         # Get current parameter configuration
+    #         param_config_data = current_config.get(field)
+    #         if param_config_data is None:
+    #             error_message = f"Parameter '{field}' not available for node {node_id}."
+    #             logger.error(error_message)
+    #             validation_errors.append(error_message)
+    #             continue
 
-            # Create a ParameterConfig object
-            param_config = ParameterConfig(**param_config_data)
+    #         # Create a ParameterConfig object
+    #         param_config = ParameterConfig(**param_config_data)
 
-            min_val = param_config.Min
-            max_val = param_config.Max
-            inc = param_config.Inc
+    #         min_val = param_config.Min
+    #         max_val = param_config.Max
+    #         inc = param_config.Inc
 
-            # Check if new_value is within Min and Max
-            if min_val is not None and new_value < min_val:
-                error_message = f"Value {new_value} for '{field}' is less than minimum {min_val}."
-                logger.error(error_message)
-                validation_errors.append(error_message)
-            if max_val is not None and new_value > max_val:
-                error_message = f"Value {new_value} for '{field}' is greater than maximum {max_val}."
-                logger.error(error_message)
-                validation_errors.append(error_message)
+    #         # Check if new_value is within Min and Max
+    #         if min_val is not None and new_value < min_val:
+    #             error_message = f"Value {new_value} for '{field}' is less than minimum {min_val}."
+    #             logger.error(error_message)
+    #             validation_errors.append(error_message)
+    #         if max_val is not None and new_value > max_val:
+    #             error_message = f"Value {new_value} for '{field}' is greater than maximum {max_val}."
+    #             logger.error(error_message)
+    #             validation_errors.append(error_message)
 
-            # Check if new_value aligns with increment
-            if inc is not None:
-                base_value = min_val if min_val is not None else 0
-                if (new_value - base_value) % inc != 0:
-                    error_message = (
-                        f"Value {new_value} for '{field}' is not a valid increment of {inc} starting from {base_value}."
-                    )
-                    logger.error(error_message)
-                    validation_errors.append(error_message)
+    #         # Check if new_value aligns with increment
+    #         if inc is not None:
+    #             base_value = min_val if min_val is not None else 0
+    #             if (new_value - base_value) % inc != 0:
+    #                 error_message = (
+    #                     f"Value {new_value} for '{field}' is not a valid increment of {inc} starting from {base_value}."
+    #                 )
+    #                 logger.error(error_message)
+    #                 validation_errors.append(error_message)
 
-        if validation_errors:
-            # Raise an exception with all validation errors
-            raise ValueError("Validation errors:\n" + "\n".join(validation_errors))
+    #     if validation_errors:
+    #         # Raise an exception with all validation errors
+    #         raise ValueError("Validation errors:\n" + "\n".join(validation_errors))
 
-        # Build the request body with 'Val' keys
-        request_body = {}
-        for field, new_value in config.dict(exclude_unset=True).items():
-            request_body[field] = {"Val": new_value}
+    #     # Build the request body with 'Val' keys
+    #     request_body = {}
+    #     for field, new_value in config.dict(exclude_unset=True).items():
+    #         request_body[field] = {"Val": new_value}
 
-        # Send PATCH request if validation passes
-        endpoint = f"/config/nodes/{node_id}"
-        logger.info("Sending PATCH request with body: {}", request_body)
-        response = self.session.patch(endpoint, json=request_body)
-        response.raise_for_status()
-        logger.debug("Updated config for node ID: {}", node_id)
+    #     # Send PATCH request if validation passes
+    #     endpoint = f"/config/nodes/{node_id}"
+    #     logger.info("Sending PATCH request with body: {}", request_body)
+    #     response = self.session.patch(endpoint, json=request_body)
+    #     response.raise_for_status()
+    #     logger.debug("Updated config for node ID: {}", node_id)
 
-        return self.get_config_node(node_id)
+    #     return self.get_config_node(node_id)
 
-    def get_config_nodes(self) -> NodesResponse:
+    def get_config_nodes(self) -> dict:
         """
         Retrieve the configuration settings for all nodes.
 
@@ -133,7 +124,7 @@ class APIClient:
         response = self.session.get(endpoint)
         response.raise_for_status()
         logger.debug("Received configuration data for all nodes")
-        return NodesResponse(**response.json())  # Parse response into NodesResponse model
+        return response.json()
 
     def get_api_info(self) -> dict:
         """Fetch API version and available endpoints."""
@@ -152,29 +143,29 @@ class APIClient:
         logger.debug("Received general info")
         return response.json()
 
-    def get_nodes(self) -> NodesInfoResponse:
+    def get_nodes(self) -> dict:
         """Retrieve list of all nodes."""
         logger.info("Fetching list of all nodes")
         response = self.session.get("/info/nodes")
         response.raise_for_status()
         logger.debug("Received nodes data")
-        return NodesInfoResponse(**response.json())
+        return response.json()
 
-    def get_node_info(self, node_id: int) -> NodeInfo:
+    def get_node_info(self, node_id: int) -> dict:
         """Retrieve detailed information for a specific node."""
         logger.info("Fetching info for node ID: {}", node_id)
         response = self.session.get(f"/info/nodes/{node_id}")
         response.raise_for_status()
         logger.debug("Received node info for node ID: {}", node_id)
-        return NodeInfo(**response.json())  # Direct instantiation for Pydantic 1.x
+        return response.json()
 
-    def get_config_node(self, node_id: int) -> ConfigNodeResponse:
+    def get_config_node(self, node_id: int) -> dict:
         """Retrieve configuration settings for a specific node."""
         logger.info("Fetching configuration for node ID: {}", node_id)
         response = self.session.get(f"/config/nodes/{node_id}")
         response.raise_for_status()
         logger.debug("Received config for node ID: {}", node_id)
-        return ConfigNodeResponse(**response.json())  # Direct instantiation for Pydantic 1.x
+        return response.json()
 
     def get_action(self, action: str = None) -> dict:
         """Retrieve action data."""
@@ -185,14 +176,14 @@ class APIClient:
         logger.debug("Received action data for action: {}", action)
         return response.json()
 
-    def get_actions_node(self, node_id: int, action: str = None) -> ActionsResponse:
+    def get_actions_node(self, node_id: int, action: str = None) -> dict:
         """Retrieve available actions for a specific node."""
         logger.info("Fetching actions for node ID: {} with action filter: {}", node_id, action)
         params = {"action": action} if action else {}
         response = self.session.get(f"/action/nodes/{node_id}", params=params)
         response.raise_for_status()
         logger.debug("Received actions for node ID: {}", node_id)
-        return ActionsResponse(**response.json())  # Direct instantiation for Pydantic 1.x
+        return response.json()
 
     def get_logs(self) -> dict:
         """Retrieve API logs."""

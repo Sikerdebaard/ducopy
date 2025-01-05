@@ -9,8 +9,6 @@ from rich import print as rich_print
 from rich.pretty import Pretty
 from urllib.parse import urlparse
 
-from ducopy.rest.models import ConfigNodeRequest
-
 app = typer.Typer(no_args_is_help=True)  # Show help if no command is provided
 
 
@@ -43,7 +41,15 @@ def print_output(data: Any, format: str) -> None:  # noqa: ANN401
     if format == "json":
         typer.echo(json.dumps(data, indent=4))
     else:
-        rich_print(Pretty(data))
+        rich_print(
+            Pretty(
+                data,
+                expand_all=True,  # Expand all nested structures
+                max_string=None,  # Do not truncate long strings
+                max_length=None,  # Do not truncate lists/tuples/dicts
+                max_depth=9999,  # Deeply nested structures? Go for it
+            )
+        )
 
 
 @app.callback()
@@ -114,7 +120,7 @@ def update_config_node(
     facade = DucoPy(base_url)
     try:
         config_data = json.loads(config_json)
-        config = ConfigNodeRequest(**config_data)
+        config = config_data
     except (json.JSONDecodeError, ValidationError) as e:
         logger.error("Invalid configuration data: {}", e)
         typer.echo(f"Invalid configuration data: {e}")
