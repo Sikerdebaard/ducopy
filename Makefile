@@ -5,7 +5,7 @@ VENV = venv311
 PYPI_REPO = pypi  # Use 'testpypi' for testing
 
 # Commands
-.PHONY: all install dev-install lint test build publish clean help increment-version
+.PHONY: all install dev-install lint test build publish clean help increment-version append-license
 
 all: help
 
@@ -51,6 +51,19 @@ clean:
 	rm -rf dist/ build/ *.egg-info
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 
+## Append a commented-out license to Python files in the src directory if not already present
+append-license:
+	@echo "Appending license to *.py files under src/ if not already present..."
+	@find src -name "*.py" | while read pyfile; do \
+		if ! grep -q "Copyright" "$$pyfile"; then \
+			sed 's/^/# /' LICENSE > "$$pyfile.new"; \
+			cat "$$pyfile" >> "$$pyfile.new"; \
+			mv "$$pyfile.new" "$$pyfile"; \
+			echo "License prepended (commented) to: $$pyfile"; \
+		fi; \
+	done
+
+
 ## Display available commands
 help:
 	@echo "Commonly used make commands:"
@@ -63,4 +76,4 @@ help:
 	@echo "                              - Use AUTO_INCREMENT_VERSION=1 make publish to increment version before publishing"
 	@echo "  make increment-version      - Manually increment the version number in pyproject.toml"
 	@echo "  make clean                  - Clean build artifacts"
-
+	@echo "  make append-license         - Prepend LICENSE to all *.py files that don't already contain the license"
