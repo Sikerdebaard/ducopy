@@ -1,5 +1,44 @@
-from pydantic import BaseModel, Field, root_validator
+# ensure pydantic 1 and 2 support since HA is in a transition phase
+try:
+    from pydantic import BaseModel, Field, root_validator
+
+    PYDANTIC_V2 = False
+except ImportError:
+    from pydantic import BaseModel, Field, model_validator
+
+    PYDANTIC_V2 = True
+
 from typing import Any, Literal
+from functools import wraps
+
+
+def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
+    """
+    A unified validator decorator for Pydantic 1.x and 2.x.
+    Ensures that user-defined validators run before field-level validation,
+    allowing data transformations to occur first (e.g. extracting `.Val`).
+    """
+
+    def decorator(user_func):  # noqa: ANN001, ANN202
+        """
+        `user_func` is the actual validation function (e.g. `def validate_something(cls, values): ...`)
+        """
+
+        @wraps(user_func)
+        def wrapper(cls, values):  # noqa: ANN202, ANN001
+            # Call the user function to transform 'values' as needed
+            return user_func(cls, values)
+
+        if PYDANTIC_V2:
+            # For Pydantic 2.x, we must set mode="before" to run prior to field validation
+            ukwargs.setdefault("mode", "before")
+            return model_validator(*uargs, **ukwargs)(wrapper)
+        else:
+            # For Pydantic 1.x, we must set pre=True to run prior to field validation
+            ukwargs.setdefault("pre", True)
+            return root_validator(*uargs, **ukwargs)(wrapper)
+
+    return decorator
 
 
 # Helper function to extract `Val` from nested dictionaries
@@ -16,7 +55,7 @@ class ParameterConfig(BaseModel):
     Max: int | None = None
     Inc: int | None = None
 
-    @root_validator(pre=True)
+    @unified_validator()
     def ensure_keys(cls, values: dict) -> dict:
         # Ensure all expected keys are present, set to None if not
         keys = ["Id", "Val", "Min", "Max", "Inc"]
@@ -57,7 +96,7 @@ class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
     Addr: int = Field(...)
 
-    @root_validator(pre=True)
+    @unified_validator()
     def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["Addr"] = extract_val(values.get("Addr", {}))
         return values
@@ -66,7 +105,7 @@ class NodeGeneralInfo(BaseModel):
 class NetworkDucoInfo(BaseModel):
     CommErrorCtr: int = Field(...)
 
-    @root_validator(pre=True)
+    @unified_validator()
     def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
         return values
@@ -80,7 +119,7 @@ class VentilationInfo(BaseModel):
     Mode: str | None = None
     FlowLvlTgt: int | None = None
 
-    @root_validator(pre=True)
+    @unified_validator()
     def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "State"]
 
@@ -106,9 +145,9 @@ class VentilationInfo(BaseModel):
 class SensorData(BaseModel):
     """Dynamically captures sensor data, including environmental sensors."""
 
-    data: dict[str, int | float | str] = Field(default_factory=dict)
+    data: dict[str, int | float | str] | None = Field(default_factory=dict)
 
-    @root_validator(pre=True)
+    @unified_validator()
     def extract_sensor_values(cls, values: dict[str, Any]) -> dict[str, Any]:
         # Iterate over all fields and extract their `Val` if they have it
         values["data"] = {key: extract_val(value) for key, value in values.items()}
@@ -120,11 +159,11 @@ class NodeInfo(BaseModel):
     General: NodeGeneralInfo
     NetworkDuco: NetworkDucoInfo | None
     Ventilation: VentilationInfo | None
-    Sensor: SensorData | None  # Includes environmental and other sensor data
+    Sensor: SensorData | None = Field(default=None)
 
 
 class NodesInfoResponse(BaseModel):
-    Nodes: list[NodeInfo]
+    Nodes: list[NodeInfo] | None = Field(default=None)
 
 
 # ConfigNodeResponse for specific node configuration
@@ -177,7 +216,7 @@ class ActionInfo(BaseModel):
     ValType: Literal["Enum", "Integer", "Boolean", "None"]
     Enum: list[str] | None  # Keep Enum optional
 
-    @root_validator(pre=True)
+    @unified_validator()
     def set_optional_enum(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":

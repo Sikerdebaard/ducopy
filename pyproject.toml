@@ -17,7 +17,7 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 dependencies = [
-    "pydantic>=1.10.17,<2",
+    "pydantic>=1.10.17,<3",
     "requests>=2.32.3,<3",
     "loguru<1,>=0.7.2",
     "typer>=0.12.5,<1",
