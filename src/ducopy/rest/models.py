@@ -84,7 +84,7 @@ def extract_val(data: dict | str | int) -> str | int | dict:
 
 
 class ParameterConfig(BaseModel):
-    Id: int
+    Id: int | None = Field(default=None)
     Val: int | str
     Min: int | None = None
     Max: int | None = None

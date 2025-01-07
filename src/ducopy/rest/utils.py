@@ -87,6 +87,7 @@ class DucoUrlSession(requests.Session):
             # Mount adapter with SSLContext to the session
             adapter = CustomHostNameCheckingAdapter(ssl_context, custom_host_mapping)
             self.mount("https://", adapter)
+            self.mount("http://", adapter)
         else:
             self.verify = verify
 
@@ -113,6 +114,7 @@ class DucoUrlSession(requests.Session):
             self.api_key_timestamp = time.time()
 
             self.headers.update({"Api-Key": self.api_key})
+            logger.debug(f"Api-Key: {self.api_key}")
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 
     def request(
@@ -142,7 +144,7 @@ class DucoUrlSession(requests.Session):
 
         kwargs.setdefault("verify", self.verify)
 
-        max_retries = 3
+        max_retries = 5
         for attempt in range(max_retries):
             try:
                 logger.debug(
@@ -150,17 +152,33 @@ class DucoUrlSession(requests.Session):
                 )
 
                 response = super().request(method, url, *args, **kwargs)
+                response.raise_for_status()
                 logger.info("Received {} response from {}", response.status_code, url)
                 return response
 
-            except requests.RequestException as e:
-                logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, e)
-
-                # If not on the last attempt, wait (2^attempt seconds), then retry
-                if attempt < max_retries - 1:
-                    backoff_time = 2**attempt
-                    logger.warning("Retrying in {} seconds...", backoff_time)
-                    time.sleep(backoff_time)
+            except requests.HTTPError as e:
+                code = e.response.status_code
+                if code == 503:
+                    # board is likely overloaded with requests
+                    logger.debug("Received http error code 503")
+                    if not self._retry_with_backoff(attempt, max_retries, url, e):
+                        raise e
                 else:
-                    # After exhausting all retries, raise the exception
-                    raise
+                    raise e
+            except requests.RequestException as e:
+                if not self._retry_with_backoff(attempt, max_retries, url, e):
+                    raise e
+
+    def _retry_with_backoff(self, attempt: int, max_retries: int, url: str, error: Exception) -> bool:
+        logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, error)
+
+        # If not on the last attempt, wait (2^attempt seconds), then retry
+        if attempt < max_retries - 1:
+            backoff_time = 2**attempt
+            logger.warning("Retrying in {} seconds...", backoff_time)
+            time.sleep(backoff_time)
+
+            return True
+        else:
+            # After exhausting all retries
+            return False
