@@ -39,7 +39,7 @@ import ssl
 from urllib.parse import urljoin
 from collections.abc import Callable
 import time
-from ducopy.rest.apikeygenerator import ApiKeyGenerator
+from ducopy.rest.connectivityboard.apikeygenerator import ApiKeyGenerator
 from loguru import logger
 
 

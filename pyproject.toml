@@ -22,6 +22,7 @@ dependencies = [
     "loguru<1,>=0.7.2",
     "typer>=0.12.5,<1",
     "rich>=13.9.4,<14",
+    "cachetools>=5",
 ]
 
 [project.optional-dependencies]
@@ -63,7 +64,8 @@ line-length = 120
 
 [tool.ruff.lint]
 extend-select = ["ANN", "UP"]
-ignore = ["E501", "ANN101"]
+ignore = ["E501", "ANN101", "F401"]
 
 [tool.ruff.lint.flake8-annotations]
 mypy-init-return = true
+

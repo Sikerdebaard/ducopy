@@ -34,7 +34,7 @@
 # SOFTWARE.
 #
 from pydantic import HttpUrl
-from ducopy.rest.models import (
+from ducopy.rest.connectivityboard.models import (
     ActionsResponse,
     NodeInfo,
     NodesResponse,
@@ -43,7 +43,7 @@ from ducopy.rest.models import (
     ParameterConfig,
     NodesInfoResponse,
 )
-from ducopy.rest.utils import DucoUrlSession
+from ducopy.rest.connectivityboard.utils import DucoUrlSession
 from loguru import logger
 
 import importlib.resources as pkg_resources
@@ -81,7 +81,11 @@ class APIClient:
         response = self.session.get(endpoint, params=params)
         response.raise_for_status()
         logger.debug("Received response for raw GET request to endpoint: {}", endpoint)
+
         return response.json()
+
+    def raw_patch(self, node_id: int, params: dict) -> dict:
+        pass
 
     def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
         """

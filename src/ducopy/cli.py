@@ -44,7 +44,7 @@ from rich import print as rich_print
 from rich.pretty import Pretty
 from urllib.parse import urlparse
 
-from ducopy.rest.models import ConfigNodeRequest
+from ducopy.rest.connectivityboard.models import ConfigNodeRequest
 
 app = typer.Typer(no_args_is_help=True)  # Show help if no command is provided
 
@@ -89,6 +89,35 @@ def configure(
 ) -> None:
     """CLI client for interacting with DucoPy."""
     setup_logging(logging_level)
+
+
+@app.command()
+def list_devicetree(
+    url: str,
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+) -> None:
+    """
+    List the devicetree for a specified URL.
+
+    Args:
+        url (str): Ducobox URL (e.g., "https://api.example.com/").
+        format (str): Output format: pretty or json.
+    """
+
+    url = validate_url(url)
+    parsed_url = urlparse(url)
+    base_url = (
+        f"{parsed_url.scheme}://{parsed_url.netloc}"  # Extract scheme and netloc (e.g., "https://api.example.com")
+    )
+
+    facade = DucoPy(base_url)
+    try:
+        response = facade.list_devicetree()
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error performing raw GET request: {}", str(e))
+        typer.echo(f"Failed to perform raw GET request: {e}")
+        raise typer.Exit(code=1)
 
 
 @app.command()
