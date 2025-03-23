@@ -33,211 +33,139 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-from pydantic import HttpUrl
-from ducopy.rest.models import (
-    ActionsResponse,
-    NodeInfo,
-    NodesResponse,
-    ConfigNodeResponse,
-    ConfigNodeRequest,
-    ParameterConfig,
-    NodesInfoResponse,
-)
-from ducopy.rest.utils import DucoUrlSession
-from loguru import logger
+import asyncio
+import ssl
+from ssl import SSLContext
+from typing import Any
+from urllib.parse import urljoin
 
 import importlib.resources as pkg_resources
+
+from aiohttp import (
+    ClientResponseError,
+    ClientConnectorDNSError,
+    ServerDisconnectedError,
+    ClientSession,
+    ClientTimeout,
+    TCPConnector,
+)
+
+from loguru import logger
 from ducopy import certs
 
 
-class APIClient:
-    def __init__(self, base_url: HttpUrl, verify: bool = True) -> None:
-        self.base_url = base_url
+class AIORestClient:
+    _base_url: str = ""
+
+    def __init__(
+        self,
+        base_url: str,
+        verify: bool = True,
+    ):
+        self._base_url = base_url
+        logger.debug(f'Using base_url "{base_url}"')
+
+        ssl_context = ssl.create_default_context()
+
         if verify:
-            self.session = DucoUrlSession(base_url, verify=self._duco_pem())
+            # Configure SSLContext to ignore hostname verification
+            # This is necessary because the PEM hostname is set to
+            #  192.168.4.1 while most connectivity boards have a
+            #  different IP.
+            pemfile = self._duco_pem()
+            ssl_context.load_verify_locations(pemfile)
+            ssl_context.check_hostname = False
+
+            logger.debug(f'SSL certificate verification enabled using PEM file: "{pemfile}".')
         else:
-            self.session = DucoUrlSession(base_url, verify=verify)
-        logger.info("APIClient initialized with base URL: {}", base_url)
+            # Disable cert verification
+            # THIS IS UNSAFE AND NOT RECOMMENDED!
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            logger.warning(
+                "Certificate validation is DISABLED. This is insecure and not recommended for production environments."
+                "Proceed with caution as it exposes the connection to potential security risks."
+            )
+
+        self._session = asyncio.run(self._get_client_session(ssl_context))
+
+    async def _get_client_session(self, ssl_context: SSLContext) -> ClientSession:
+        return ClientSession(connector=TCPConnector(ssl=ssl_context))
+
+    def __del__(self) -> None:
+        try:
+            asyncio.run(self._close())
+        except Exception as e:
+            logger.warning(f"Error while closing session: {e}")
+            asyncio.new_event_loop().run_until_complete(self._close())
+
+    async def _close(self) -> None:
+        try:
+            await self._session.close()
+
+        except Exception as e:
+            logger.error(f"Error while closing session: {e}")
 
     def _duco_pem(self) -> str:
-        """Enable certificate pinning."""
+        """Used to enable certificate pinning."""
         pem_path = pkg_resources.files(certs).joinpath("api_cert.pem")
-        logger.debug("Using certificate at path: {}", pem_path)
+        logger.debug(f'Using certificate at path: "{pem_path}"')
 
         return str(pem_path)
 
-    def raw_get(self, endpoint: str, params: dict = None) -> dict:
-        """
-        Perform a raw GET request to the specified endpoint.
+    def get(self, *args: tuple, **kwargs: dict) -> dict[str, Any] | None:
+        return asyncio.run(self.async_get(*args, **kwargs))
 
-        Args:
-            endpoint (str): The endpoint to send the GET request to (e.g., "/api").
-            params (dict, optional): Query parameters to include in the request.
+    async def async_get(self, endpoint: str, max_retries: int = 5) -> dict[str, Any] | None:
+        retries = 0
+        url = urljoin(self._base_url, endpoint)
+        while retries < max_retries:
+            try:
+                async with self._session.get(
+                    url,
+                    # headers=self._headers,
+                    timeout=ClientTimeout(total=20000, sock_connect=300),
+                ) as response:
+                    logger.debug(f"Response status: {response.status}")
 
-        Returns:
-            dict: JSON response from the server.
-        """
-        logger.info("Performing raw GET request to endpoint: {} with params: {}", endpoint, params)
-        response = self.session.get(endpoint, params=params)
-        response.raise_for_status()
-        logger.debug("Received response for raw GET request to endpoint: {}", endpoint)
-        return response.json()
+                    if 500 <= response.status <= 599:
+                        raise ClientResponseError(
+                            request_info=response.request_info,
+                            history=response.history,
+                            status=response.status,
+                            message="Service Unavailable",
+                        )
 
-    def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
-        """
-        Update configuration settings for a specific node after validating the new values.
+                    else:
+                        response.raise_for_status()
 
-        Args:
-            node_id (int): The ID of the node to update.
-            config (ConfigNodeRequest): The configuration data to update.
+                    return await response.json()
 
-        Returns:
-            ConfigNodeResponse: The updated configuration response from the server.
-        """
-        logger.info("Updating configuration for node ID: {}", node_id)
+            except ClientResponseError as e:
+                if e.status in self._retriable_status_codes:
+                    retries += 1
+                    delay = 1 * (2 ** (retries - 1))  # Exponential backoff
+                    logger.warning(f"Retry {retries}/{max_retries}: Waiting {delay:.2f} seconds ({e.status} received)")
+                    await asyncio.sleep(delay)
 
-        # Fetch current configuration of the node
-        current_config_response = self.get_config_node(node_id)
-        current_config = current_config_response.dict()
+                else:
+                    raise  # Reraise for other HTTP errors
 
-        # Validation logic (same as before)
-        validation_errors = []
-        for field, new_value in config.dict(exclude_unset=True).items():
-            # Get current parameter configuration
-            param_config_data = current_config.get(field)
-            if param_config_data is None:
-                error_message = f"Parameter '{field}' not available for node {node_id}."
-                logger.error(error_message)
-                validation_errors.append(error_message)
-                continue
+            except ClientConnectorDNSError as e:
+                logger.error(f"DNS resolution error: {e}")
+                raise e
 
-            # Create a ParameterConfig object
-            param_config = ParameterConfig(**param_config_data)
+            except ServerDisconnectedError as e:
+                logger.error(f"Server disconnected error: {e}")
+                retries += 1
+                delay = 1 * (2 ** (retries - 1))
+                logger.warning(f"Retry {retries}/{max_retries}: Waiting {delay:.2f} seconds ({e.message} received)")
+                await asyncio.sleep(delay)
 
-            min_val = param_config.Min
-            max_val = param_config.Max
-            inc = param_config.Inc
+            except Exception as e:
+                logger.error(f"{type(e)=}, Error fetching {url}: {e}")
+                raise
 
-            # Check if new_value is within Min and Max
-            if min_val is not None and new_value < min_val:
-                error_message = f"Value {new_value} for '{field}' is less than minimum {min_val}."
-                logger.error(error_message)
-                validation_errors.append(error_message)
-            if max_val is not None and new_value > max_val:
-                error_message = f"Value {new_value} for '{field}' is greater than maximum {max_val}."
-                logger.error(error_message)
-                validation_errors.append(error_message)
-
-            # Check if new_value aligns with increment
-            if inc is not None:
-                base_value = min_val if min_val is not None else 0
-                if (new_value - base_value) % inc != 0:
-                    error_message = (
-                        f"Value {new_value} for '{field}' is not a valid increment of {inc} starting from {base_value}."
-                    )
-                    logger.error(error_message)
-                    validation_errors.append(error_message)
-
-        if validation_errors:
-            # Raise an exception with all validation errors
-            raise ValueError("Validation errors:\n" + "\n".join(validation_errors))
-
-        # Build the request body with 'Val' keys
-        request_body = {}
-        for field, new_value in config.dict(exclude_unset=True).items():
-            request_body[field] = {"Val": new_value}
-
-        # Send PATCH request if validation passes
-        endpoint = f"/config/nodes/{node_id}"
-        logger.info("Sending PATCH request with body: {}", request_body)
-        response = self.session.patch(endpoint, json=request_body)
-        response.raise_for_status()
-        logger.debug("Updated config for node ID: {}", node_id)
-
-        return self.get_config_node(node_id)
-
-    def get_config_nodes(self) -> NodesResponse:
-        """
-        Retrieve the configuration settings for all nodes.
-
-        Returns:
-            NodesResponse: Parsed response containing configuration data for all nodes.
-        """
-        endpoint = "/config/nodes"
-        logger.info("Fetching configuration for all nodes from endpoint: {}", endpoint)
-        response = self.session.get(endpoint)
-        response.raise_for_status()
-        logger.debug("Received configuration data for all nodes")
-        return NodesResponse(**response.json())  # Parse response into NodesResponse model
-
-    def get_api_info(self) -> dict:
-        """Fetch API version and available endpoints."""
-        logger.info("Fetching API information")
-        response = self.session.get("/api")
-        response.raise_for_status()
-        logger.debug("Received API information")
-        return response.json()
-
-    def get_info(self, module: str = None, submodule: str = None, parameter: str = None) -> dict:
-        """Fetch general API information."""
-        params = {k: v for k, v in {"module": module, "submodule": submodule, "parameter": parameter}.items() if v}
-        logger.info("Fetching info with parameters: {}", params)
-        response = self.session.get("/info", params=params)
-        response.raise_for_status()
-        logger.debug("Received general info")
-        return response.json()
-
-    def get_nodes(self) -> NodesInfoResponse:
-        """Retrieve list of all nodes."""
-        logger.info("Fetching list of all nodes")
-        response = self.session.get("/info/nodes")
-        response.raise_for_status()
-        logger.debug("Received nodes data")
-        return NodesInfoResponse(**response.json())
-
-    def get_node_info(self, node_id: int) -> NodeInfo:
-        """Retrieve detailed information for a specific node."""
-        logger.info("Fetching info for node ID: {}", node_id)
-        response = self.session.get(f"/info/nodes/{node_id}")
-        response.raise_for_status()
-        logger.debug("Received node info for node ID: {}", node_id)
-        return NodeInfo(**response.json())  # Direct instantiation for Pydantic 1.x
-
-    def get_config_node(self, node_id: int) -> ConfigNodeResponse:
-        """Retrieve configuration settings for a specific node."""
-        logger.info("Fetching configuration for node ID: {}", node_id)
-        response = self.session.get(f"/config/nodes/{node_id}")
-        response.raise_for_status()
-        logger.debug("Received config for node ID: {}", node_id)
-        return ConfigNodeResponse(**response.json())  # Direct instantiation for Pydantic 1.x
-
-    def get_action(self, action: str = None) -> dict:
-        """Retrieve action data."""
-        logger.info("Fetching action data for action: {}", action)
-        params = {"action": action} if action else {}
-        response = self.session.get("/action", params=params)
-        response.raise_for_status()
-        logger.debug("Received action data for action: {}", action)
-        return response.json()
-
-    def get_actions_node(self, node_id: int, action: str = None) -> ActionsResponse:
-        """Retrieve available actions for a specific node."""
-        logger.info("Fetching actions for node ID: {} with action filter: {}", node_id, action)
-        params = {"action": action} if action else {}
-        response = self.session.get(f"/action/nodes/{node_id}", params=params)
-        response.raise_for_status()
-        logger.debug("Received actions for node ID: {}", node_id)
-        return ActionsResponse(**response.json())  # Direct instantiation for Pydantic 1.x
-
-    def get_logs(self) -> dict:
-        """Retrieve API logs."""
-        logger.info("Fetching API logs")
-        response = self.session.get("/log/api")
-        response.raise_for_status()
-        logger.debug("Received API logs")
-        return response.json()
-
-    def close(self) -> None:
-        """Close the HTTP session."""
-        logger.info("Closing the API client session")
-        self.session.close()
+        logger.warning(f"Failed to fetch {url} after {max_retries} retries.")
+        return None

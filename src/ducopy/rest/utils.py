@@ -33,40 +33,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-import requests
-from requests.adapters import HTTPAdapter
+import aiohttp
+import asyncio
 import ssl
 from urllib.parse import urljoin
-from collections.abc import Callable
 import time
 from ducopy.rest.apikeygenerator import ApiKeyGenerator
 from loguru import logger
 
 
-# Map the URL to the expected hostname in the certificate
-def custom_host_mapping(url: str) -> str:
-    return "192.168.4.1"
-
-
-class CustomHostNameCheckingAdapter(HTTPAdapter):
-    def __init__(
-        self, ssl_context: ssl.SSLContext, hostname_resolver: Callable[[str], str], *args: tuple, **kwargs: dict
-    ) -> None:
-        self.ssl_context = ssl_context
-        self.hostname_resolver = hostname_resolver
-        super().__init__(*args, **kwargs)
-
-    def init_poolmanager(self, *args: tuple, **kwargs: dict) -> None:
-        kwargs["ssl_context"] = self.ssl_context
-        return super().init_poolmanager(*args, **kwargs)
-
-    def cert_verify(self, conn: requests.adapters.HTTPAdapter, url: str, verify: bool, cert: str | None) -> None:
-        # conn.assert_hostname = self.hostname_resolver(url)
-        conn.assert_hostname = False
-        return super().cert_verify(conn, url, verify, cert)
-
-
-class DucoUrlSession(requests.Session):
+class DucoAIOClient:
     def __init__(self, base_url: str, verify: bool | str = True) -> None:
         """
         Initializes the BaseUrlSession with a base URL and optional SSL verification setting.
@@ -75,35 +51,36 @@ class DucoUrlSession(requests.Session):
             base_url (str): The base URL to prepend to relative URLs.
             verify (bool | str): Path to the certificate or a boolean indicating SSL verification.
         """
-        super().__init__()
         self.base_url = base_url
 
         if isinstance(verify, str):
             # Configure SSLContext to ignore hostname verification
             ssl_context = ssl.create_default_context()
             ssl_context.load_verify_locations(verify)
+            ssl_context.check_hostname = False
+            self._ssl_context = ssl_context
             self.verify = True
 
             # Mount adapter with SSLContext to the session
-            adapter = CustomHostNameCheckingAdapter(ssl_context, custom_host_mapping)
-            self.mount("https://", adapter)
-            self.mount("http://", adapter)
+            # self.adapter = CustomHostNameCheckingAdapter(ssl_context, custom_host_mapping)
         else:
             self.verify = verify
+            self._ssl_context = ssl.create_default_context()
 
         self.api_key: str | None = None
         self.api_key_timestamp: float = 0.0
-        self.api_key_cache_duration: int = 60
+        self.api_key_cache_duration: int = 5  # set api key to be valid for about 5 minutes
 
         logger.info("Initialized DucoUrlSession for base URL: {}", base_url)
 
-    def _ensure_apikey(self) -> None:
+    async def _ensure_apikey(self) -> None:
         """Refresh API key if expired or missing."""
         if not self.api_key or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration:
             logger.debug("API key is missing or expired. Fetching a new one.")
-            req = self.request("GET", "/info", ensure_apikey=False)
-            req.raise_for_status()
-            data = req.json()
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=self._ssl_context)) as session:
+                async with session.get(urljoin(self.base_url, "/info"), ssl=self.verify) as response:
+                    response.raise_for_status()
+                    data = await response.json()
 
             ducomac = data["General"]["Lan"]["Mac"]["Val"]
             ducoserial = data["General"]["Board"]["SerialBoardBox"]["Val"]
@@ -113,13 +90,13 @@ class DucoUrlSession(requests.Session):
             self.api_key = apigen.generate_api_key(ducoserial, ducomac, ducotime)
             self.api_key_timestamp = time.time()
 
-            self.headers.update({"Api-Key": self.api_key})
+            self.headers = {"Api-Key": self.api_key}
             logger.debug(f"Api-Key: {self.api_key}")
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 
-    def request(
+    async def request(
         self, method: str, url: str, ensure_apikey: bool = True, *args: tuple, **kwargs: dict
-    ) -> requests.Response:
+    ) -> aiohttp.ClientResponse:
         """
         Sends a request, automatically prepending the base URL to the given URL if it's relative.
         Implements an exponential backoff retry strategy (up to 5 attempts) on request failures.
@@ -130,19 +107,19 @@ class DucoUrlSession(requests.Session):
             ensure_apikey (bool): Whether to automatically ensure an API key is present/valid.
 
         Returns:
-            Response: The HTTP response from the server.
+            ClientResponse: The HTTP response from the server.
 
         Raises:
-            requests.RequestException: If all retry attempts fail or another request-related error occurs.
+            aiohttp.ClientError: If all retry attempts fail or another request-related error occurs.
         """
         if ensure_apikey:
-            self._ensure_apikey()
+            await self._ensure_apikey()
 
         # Join the base URL with the provided URL path
         if not url.startswith("http"):
             url = urljoin(self.base_url, url)
 
-        kwargs.setdefault("verify", self.verify)
+        kwargs.setdefault("ssl", self.verify)
 
         max_retries = 5
         for attempt in range(max_retries):
@@ -151,32 +128,33 @@ class DucoUrlSession(requests.Session):
                     "Sending {} request to URL: {} (attempt {}/{})", method.upper(), url, attempt + 1, max_retries
                 )
 
-                response = super().request(method, url, *args, **kwargs)
-                response.raise_for_status()
-                logger.info("Received {} response from {}", response.status_code, url)
-                return response
+                async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=self._ssl_context)) as session:
+                    async with session.request(method, url, *args, **kwargs) as response:
+                        response.raise_for_status()
+                        logger.info("Received {} response from {}", response.status, url)
+                        return response
 
-            except requests.HTTPError as e:
-                code = e.response.status_code
+            except aiohttp.ClientResponseError as e:
+                code = e.status
                 if code == 503:
                     # board is likely overloaded with requests
                     logger.debug("Received http error code 503")
-                    if not self._retry_with_backoff(attempt, max_retries, url, e):
+                    if not await self._retry_with_backoff(attempt, max_retries, url, e):
                         raise e
                 else:
                     raise e
-            except requests.RequestException as e:
-                if not self._retry_with_backoff(attempt, max_retries, url, e):
+            except aiohttp.ClientError as e:
+                if not await self._retry_with_backoff(attempt, max_retries, url, e):
                     raise e
 
-    def _retry_with_backoff(self, attempt: int, max_retries: int, url: str, error: Exception) -> bool:
+    async def _retry_with_backoff(self, attempt: int, max_retries: int, url: str, error: Exception) -> bool:
         logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, error)
 
         # If not on the last attempt, wait (2^attempt seconds), then retry
         if attempt < max_retries - 1:
             backoff_time = 2**attempt
             logger.warning("Retrying in {} seconds...", backoff_time)
-            time.sleep(backoff_time)
+            await asyncio.sleep(backoff_time)
 
             return True
         else:

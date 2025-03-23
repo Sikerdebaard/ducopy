@@ -33,4 +33,4 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-from ducopy.ducopy import DucoPy, NodesResponse, NodeInfo, ConfigNodeResponse, ActionsResponse  # noqa: F401
+# from ducopy.ducopy import DucoPy, NodesResponse, NodeInfo, ConfigNodeResponse, ActionsResponse  # noqa: F401
