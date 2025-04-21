@@ -41,6 +41,7 @@ from ducopy.rest.models import (
     ActionsResponse,
     ConfigNodeRequest,
     NodesInfoResponse,
+    ActionsChangeResponse
 )
 from pydantic import HttpUrl
 
@@ -51,6 +52,9 @@ class DucoPy:
 
     def raw_get(self, endpoint: str, params: dict = None) -> dict:
         return self.client.raw_get(endpoint=endpoint, params=params)
+    
+    def change_action_node(self, action: str, value: str, node_id: int) -> ActionsChangeResponse:
+        return self.client.post_action_node(action, value, node_id)
 
     def update_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
         return self.client.patch_config_node(node_id=node_id, config=config)
