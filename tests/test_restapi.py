@@ -1,7 +1,7 @@
 import os
 import pytest
 from ducopy.rest.client import APIClient
-from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse
+from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse, ActionsChangeResponse
 
 
 @pytest.fixture(scope="module")
@@ -82,6 +82,22 @@ def test_get_config_node_insecure(client_insecure: APIClient) -> None:
     config_node_response = client_insecure.get_config_node(node_id=1)
     assert isinstance(config_node_response, ConfigNodeResponse), "Expected ConfigNodeResponse instance"
     assert config_node_response.Node == 1, "Config node response should match node ID 1"
+
+
+def test_set_actions_node(client: APIClient) -> None:
+    """Test setting actions for a specific node action with SSL verification."""
+    set_action_response = client.post_action_node(action="SetVentilationState", value="MAN1", node_id=1)
+    assert isinstance(set_action_response, ActionsChangeResponse), "Expected ActionsChangeResponse instance"
+    assert set_action_response.Code == 0, "Action response code should be 0"
+    assert set_action_response.Result == "SUCCESS", "Action response result should be SUCCESS"
+
+
+def test_set_actions_node_insecure(client_insecure: APIClient) -> None:
+    """Test fetching configuration settings for a specific node with SSL verification."""
+    set_action_response = client_insecure.post_action_node(action="SetVentilationState", value="MAN1", node_id=1)
+    assert isinstance(set_action_response, ActionsChangeResponse), "Expected ActionsChangeResponse instance"
+    assert set_action_response.Code == 0, "Action response code should be 0"
+    assert set_action_response.Result == "SUCCESS", "Action response result should be SUCCESS"
 
 
 def test_get_logs(client: APIClient) -> None:

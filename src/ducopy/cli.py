@@ -130,6 +130,35 @@ def raw_get(
 
 
 @app.command()
+def change_action_node(
+    base_url: str,
+    node_id: int,
+    action: Annotated[str, typer.Option(help="The action key to include in the JSON body")],
+    value: Annotated[str, typer.Option(help="The value key to include in the JSON body")],
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+) -> None:
+    """
+    Perform a POST action by sending a JSON body to the endpoint.
+
+    Args:
+        base_url (str): The base URL of the API.
+        node_id (int): The ID of the node to perform the action on.
+        action (str): The action key to include in the JSON body.
+        value (str): The value key to include in the JSON body.
+        format (str): Output format: pretty or json.
+    """
+    base_url = validate_url(base_url)
+    facade = DucoPy(base_url)
+    try:
+        response = facade.change_action_node(action=action, value=value, node_id=node_id)
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error performing POST action for node {}: {}", node_id, e)
+        typer.echo(f"Failed to perform POST action for node {node_id}: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def update_config_node(
     base_url: str,
     node_id: int,

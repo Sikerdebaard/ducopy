@@ -42,12 +42,14 @@ from ducopy.rest.models import (
     ConfigNodeRequest,
     ParameterConfig,
     NodesInfoResponse,
+    ActionsChangeResponse
 )
 from ducopy.rest.utils import DucoUrlSession
 from loguru import logger
 
 import importlib.resources as pkg_resources
 from ducopy import certs
+import json
 
 
 class APIClient:
@@ -82,6 +84,53 @@ class APIClient:
         response.raise_for_status()
         logger.debug("Received response for raw GET request to endpoint: {}", endpoint)
         return response.json()
+
+    def post_action_node(self, action: str, value: str, node_id: int) -> ActionsChangeResponse:
+        """
+        Perform a POST action by sending a JSON body to the endpoint.
+
+        Args:
+            action (str): The action key to include in the JSON body.
+            value (Any): The value key to include in the JSON body.
+            node_id (int): The ID of the node to perform the action on.
+
+        Returns:
+            dict: JSON response from the server.
+        """
+        # Fetch available actions for the node
+        logger.info("Fetching available actions for node ID: {}", node_id)
+        available_actions = self.get_actions_node(node_id=node_id)
+
+        # Validate the action
+        matching_action = next((a for a in available_actions.Actions if a.Action == action), None)
+        if not matching_action:
+            raise ValueError(f"Invalid action '{action}' for node {node_id}. Available actions: {[a.Action for a in available_actions.Actions]}")
+
+        # Validate the value
+        if matching_action.ValType == "Enum":
+            if value not in matching_action.Enum:
+                raise ValueError(f"Invalid value '{value}' for action '{action}'. Allowed values: {matching_action.Enum}")
+        elif matching_action.ValType == "Boolean":
+            if value not in ["true", "false", "True", "False"]:
+                raise ValueError(f"Invalid value '{value}' for action '{action}'. Allowed values: ['true', 'false']")
+        elif matching_action.ValType == "Integer":
+            try:
+                int(value)
+            except ValueError:
+                raise ValueError(f"Invalid value '{value}' for action '{action}'. Expected an integer.")       
+        
+    
+        endpoint = f"/action/nodes/{node_id}" 
+        logger.info("Performing POST action with Action: {} and Val: {}", action, value)
+        request_body = {"Action": action,"Val": value}
+        # Without this, aka without removing space between the two key value pairs, it will return a 400 error
+        serialized_body = json.dumps(request_body, separators=(",", ":"))
+        
+        response = self.session.post(endpoint, data=serialized_body)
+        response.raise_for_status()
+        logger.debug("Received response for POST action from Node: {} with Action: {} and Val: {}", node_id, action, value)
+        
+        return ActionsChangeResponse(**response.json())
 
     def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
         """

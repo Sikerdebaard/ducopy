@@ -262,3 +262,8 @@ class ActionInfo(BaseModel):
 class ActionsResponse(BaseModel):
     Node: int
     Actions: list[ActionInfo]
+
+
+class ActionsChangeResponse(BaseModel):
+    Code: int
+    Result: str
