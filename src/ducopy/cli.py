@@ -130,6 +130,80 @@ def raw_get(
 
 
 @app.command()
+def raw_post(
+    url: str,
+    data: Annotated[str, typer.Option(help="Request body data as a JSON string")] = "{}",
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+) -> None:
+    """
+    Perform a raw POST request to a specified URL.
+
+    Args:
+        url (str): Full URL of the API endpoint (e.g., "https://api.example.com/api").
+        data (str): Request body data as a JSON string (e.g., '{"key": "value"}').
+        params (str): Query parameters as a JSON string (e.g., '{"key": "value"}').
+        format (str): Output format: pretty or json.
+    """
+    url = validate_url(url)
+    parsed_url = urlparse(url)
+    base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+    endpoint = parsed_url.path
+
+    try:
+        # Parse the data and params JSON strings into dictionaries
+        request_data = json.loads(data)
+    except json.JSONDecodeError:
+        typer.echo("Invalid JSON string for request data or query parameters.")
+        raise typer.Exit(code=1)
+
+    facade = DucoPy(base_url)
+    try:
+        response = facade.raw_post(endpoint=endpoint, data=request_data)
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error performing raw POST request: {}", str(e))
+        typer.echo(f"Failed to perform raw POST request: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def raw_patch(
+    url: str,
+    data: Annotated[str, typer.Option(help="Request body data as a JSON string")] = "{}",
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+) -> None:
+    """
+    Perform a raw PATCH request to a specified URL.
+
+    Args:
+        url (str): Full URL of the API endpoint (e.g., "https://api.example.com/api").
+        data (str): Request body data as a JSON string (e.g., '{"key": "value"}').
+        format (str): Output format: pretty or json.
+    """
+    url = validate_url(url)
+    parsed_url = urlparse(url)
+    base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+    endpoint = parsed_url.path
+
+    try:
+        # Parse the data JSON strings
+        # This ensures that we are sending valid JSON
+        request_data = json.loads(data)  # noqa: F841
+    except json.JSONDecodeError:
+        typer.echo("Invalid JSON string for request data or query parameters.")
+        raise typer.Exit(code=1)
+
+    facade = DucoPy(base_url)
+    try:
+        response = facade.raw_patch(endpoint, data=data)
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error performing raw PATCH request: {}", str(e))
+        typer.echo(f"Failed to perform raw PATCH request: {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def change_action_node(
     base_url: str,
     node_id: int,

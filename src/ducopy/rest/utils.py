@@ -144,13 +144,12 @@ class DucoUrlSession(requests.Session):
 
         kwargs.setdefault("verify", self.verify)
 
-        max_retries = 5
+        max_retries = 3
         for attempt in range(max_retries):
             try:
                 logger.debug(
                     "Sending {} request to URL: {} (attempt {}/{})", method.upper(), url, attempt + 1, max_retries
                 )
-
                 response = super().request(method, url, *args, **kwargs)
                 response.raise_for_status()
                 logger.info("Received {} response from {}", response.status_code, url)
