@@ -42,7 +42,7 @@ from ducopy.rest.models import (
     ConfigNodeRequest,
     ParameterConfig,
     NodesInfoResponse,
-    ActionsChangeResponse
+    ActionsChangeResponse,
 )
 from ducopy.rest.utils import DucoUrlSession
 from loguru import logger
@@ -85,6 +85,42 @@ class APIClient:
         logger.debug("Received response for raw GET request to endpoint: {}", endpoint)
         return response.json()
 
+    def raw_post(self, endpoint: str, data: str | None = None) -> dict:
+        """
+        Perform a raw POST request to the specified endpoint with retry logic.
+
+        Args:
+            endpoint (str): The endpoint to send the POST request to (e.g., "/api").
+            data (dict, optional): The data to include in the request body.
+            params (dict, optional): Query parameters to include in the request.
+
+        Returns:
+            dict: JSON response from the server.
+        """
+        logger.info(f"Performing raw POST request to endpoint: {endpoint} with data: {data}")
+        response = self.session.post(endpoint, json=data)
+        response.raise_for_status()
+        logger.debug("Received response for raw POST request to endpoint: {}", endpoint)
+        return response.json()
+
+    def raw_patch(self, endpoint: str, data: str | None = None) -> dict:
+        """
+        Perform a raw PATCH request to the specified endpoint with retry logic.
+
+        Args:
+            endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
+            data (dict, optional): The data to include in the request body.
+            params (dict, optional): Query parameters to include in the request.
+
+        Returns:
+            dict: JSON response from the server.
+        """
+        logger.info(f"Performing raw PATCH request to endpoint: {endpoint} with data: {data}")
+        response = self.session.patch(endpoint, data=data)
+        response.raise_for_status()
+        logger.debug(f"Received response for raw PATCH request to endpoint: {endpoint}")
+        return response.json()
+
     def post_action_node(self, action: str, value: str, node_id: int) -> ActionsChangeResponse:
         """
         Perform a POST action by sending a JSON body to the endpoint.
@@ -104,12 +140,16 @@ class APIClient:
         # Validate the action
         matching_action = next((a for a in available_actions.Actions if a.Action == action), None)
         if not matching_action:
-            raise ValueError(f"Invalid action '{action}' for node {node_id}. Available actions: {[a.Action for a in available_actions.Actions]}")
+            raise ValueError(
+                f"Invalid action '{action}' for node {node_id}. Available actions: {[a.Action for a in available_actions.Actions]}"
+            )
 
         # Validate the value
         if matching_action.ValType == "Enum":
             if value not in matching_action.Enum:
-                raise ValueError(f"Invalid value '{value}' for action '{action}'. Allowed values: {matching_action.Enum}")
+                raise ValueError(
+                    f"Invalid value '{value}' for action '{action}'. Allowed values: {matching_action.Enum}"
+                )
         elif matching_action.ValType == "Boolean":
             if value not in ["true", "false", "True", "False"]:
                 raise ValueError(f"Invalid value '{value}' for action '{action}'. Allowed values: ['true', 'false']")
@@ -117,19 +157,20 @@ class APIClient:
             try:
                 int(value)
             except ValueError:
-                raise ValueError(f"Invalid value '{value}' for action '{action}'. Expected an integer.")       
-        
-    
-        endpoint = f"/action/nodes/{node_id}" 
+                raise ValueError(f"Invalid value '{value}' for action '{action}'. Expected an integer.")
+
+        endpoint = f"/action/nodes/{node_id}"
         logger.info("Performing POST action with Action: {} and Val: {}", action, value)
-        request_body = {"Action": action,"Val": value}
+        request_body = {"Action": action, "Val": value}
         # Without this, aka without removing space between the two key value pairs, it will return a 400 error
         serialized_body = json.dumps(request_body, separators=(",", ":"))
-        
+
         response = self.session.post(endpoint, data=serialized_body)
         response.raise_for_status()
-        logger.debug("Received response for POST action from Node: {} with Action: {} and Val: {}", node_id, action, value)
-        
+        logger.debug(
+            "Received response for POST action from Node: {} with Action: {} and Val: {}", node_id, action, value
+        )
+
         return ActionsChangeResponse(**response.json())
 
     def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
