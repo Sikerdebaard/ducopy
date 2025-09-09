@@ -43,20 +43,44 @@ from ducopy.rest.models import (
     NodesInfoResponse,
     ActionsChangeResponse,
 )
+from loguru import logger
 from pydantic import HttpUrl
+import sys
 
 
 class DucoPy:
     """A facade for interacting with the Duco API."""
 
-    def __init__(self, base_url: HttpUrl, verify: bool = True) -> None:
+    def __init__(self, base_url: HttpUrl, verify: bool = True, log_level: str = None) -> None:
         """Initialize the DucoPy facade with the base URL and verification option.
 
         Args:
             base_url (HttpUrl): The base URL of the Duco API.
             verify (bool, optional): Whether to verify SSL certificates. Defaults to True.
+            log_level (str, optional): Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). Defaults to None.
         """
+        if log_level is not None:
+            self.configure_logging(log_level)
+        
         self.client = APIClient(base_url, verify)
+        logger.info("Initialized DucoPy with base URL: {}", base_url)
+
+    @classmethod
+    def configure_logging(cls, level: str = "INFO", sink: object = sys.stdout) -> None:
+        """Configure logging for the DucoPy library.
+        
+        Args:
+            level (str): Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            sink: Where to output logs (default: sys.stdout)
+            format_string (str): Custom format string for log messages
+        """
+        logger.remove()
+        
+        logger.add(
+            sink=sink,
+            level=level.upper(),
+        )
+        logger.info("DucoPy logging configured with level: {}", level)
 
     def raw_post(self, endpoint: str, data: str | None = None) -> dict:
         """Perform a raw POST request to the specified endpoint.
