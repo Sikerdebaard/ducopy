@@ -117,6 +117,13 @@ class NodeConfig(BaseModel):
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
 
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        if "node" in values and "Node" not in values:
+            values["Node"] = values.pop("node")
+        return values
+
 
 class NodesResponse(BaseModel):
     Nodes: list[NodeConfig]
@@ -222,6 +229,13 @@ class ConfigNodeResponse(BaseModel):
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
 
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        if "node" in values and "Node" not in values:
+            values["Node"] = values.pop("node")
+        return values
+
 
 class ConfigNodeRequest(BaseModel):
     Name: str | None = None
@@ -265,5 +279,6 @@ class ActionsResponse(BaseModel):
 
 
 class ActionsChangeResponse(BaseModel):
-    Code: int
+    Code: int | None = None
     Result: str
+    Action: str | None = None

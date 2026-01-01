@@ -88,16 +88,20 @@ def test_set_actions_node(client: APIClient) -> None:
     """Test setting actions for a specific node action with SSL verification."""
     set_action_response = client.post_action_node(action="SetVentilationState", value="MAN1", node_id=1)
     assert isinstance(set_action_response, ActionsChangeResponse), "Expected ActionsChangeResponse instance"
-    assert set_action_response.Code == 0, "Action response code should be 0"
-    assert set_action_response.Result == "SUCCESS", "Action response result should be SUCCESS"
+    # Code field is optional, check if present
+    if set_action_response.Code is not None:
+        assert set_action_response.Code == 0, "Action response code should be 0"
+    assert set_action_response.Result in ["SUCCESS", "Success"], "Action response result should be SUCCESS or Success"
 
 
 def test_set_actions_node_insecure(client_insecure: APIClient) -> None:
     """Test fetching configuration settings for a specific node with SSL verification."""
     set_action_response = client_insecure.post_action_node(action="SetVentilationState", value="MAN1", node_id=1)
     assert isinstance(set_action_response, ActionsChangeResponse), "Expected ActionsChangeResponse instance"
-    assert set_action_response.Code == 0, "Action response code should be 0"
-    assert set_action_response.Result == "SUCCESS", "Action response result should be SUCCESS"
+    # Code field is optional, check if present
+    if set_action_response.Code is not None:
+        assert set_action_response.Code == 0, "Action response code should be 0"
+    assert set_action_response.Result in ["SUCCESS", "Success"], "Action response result should be SUCCESS or Success"
 
 
 def test_get_logs(client: APIClient) -> None:
