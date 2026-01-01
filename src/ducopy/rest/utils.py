@@ -50,7 +50,11 @@ def custom_host_mapping(url: str) -> str:
 
 class CustomHostNameCheckingAdapter(HTTPAdapter):
     def __init__(
-        self, ssl_context: ssl.SSLContext, hostname_resolver: Callable[[str], str], *args: tuple, **kwargs: dict
+        self,
+        ssl_context: ssl.SSLContext,
+        hostname_resolver: Callable[[str], str],
+        *args: tuple,
+        **kwargs: dict,
     ) -> None:
         self.ssl_context = ssl_context
         self.hostname_resolver = hostname_resolver
@@ -60,7 +64,13 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
         kwargs["ssl_context"] = self.ssl_context
         return super().init_poolmanager(*args, **kwargs)
 
-    def cert_verify(self, conn: requests.adapters.HTTPAdapter, url: str, verify: bool, cert: str | None) -> None:
+    def cert_verify(
+        self,
+        conn: requests.adapters.HTTPAdapter,
+        url: str,
+        verify: bool,
+        cert: str | None,
+    ) -> None:
         # conn.assert_hostname = self.hostname_resolver(url)
         conn.assert_hostname = False
         return super().cert_verify(conn, url, verify, cert)
@@ -99,7 +109,10 @@ class DucoUrlSession(requests.Session):
 
     def _ensure_apikey(self) -> None:
         """Refresh API key if expired or missing."""
-        if not self.api_key or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration:
+        if (
+            not self.api_key
+            or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration
+        ):
             logger.debug("API key is missing or expired. Fetching a new one.")
             req = self.request("GET", "/info", ensure_apikey=False)
             req.raise_for_status()
@@ -118,7 +131,12 @@ class DucoUrlSession(requests.Session):
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 
     def request(
-        self, method: str, url: str, ensure_apikey: bool = True, *args: tuple, **kwargs: dict
+        self,
+        method: str,
+        url: str,
+        ensure_apikey: bool = True,
+        *args: tuple,
+        **kwargs: dict,
     ) -> requests.Response:
         """
         Sends a request, automatically prepending the base URL to the given URL if it's relative.
@@ -148,7 +166,11 @@ class DucoUrlSession(requests.Session):
         for attempt in range(max_retries):
             try:
                 logger.debug(
-                    "Sending {} request to URL: {} (attempt {}/{})", method.upper(), url, attempt + 1, max_retries
+                    "Sending {} request to URL: {} (attempt {}/{})",
+                    method.upper(),
+                    url,
+                    attempt + 1,
+                    max_retries,
                 )
                 response = super().request(method, url, *args, **kwargs)
                 response.raise_for_status()
@@ -168,8 +190,16 @@ class DucoUrlSession(requests.Session):
                 if not self._retry_with_backoff(attempt, max_retries, url, e):
                     raise e
 
-    def _retry_with_backoff(self, attempt: int, max_retries: int, url: str, error: Exception) -> bool:
-        logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, error)
+    def _retry_with_backoff(
+        self, attempt: int, max_retries: int, url: str, error: Exception
+    ) -> bool:
+        logger.error(
+            "Request to {} failed (attempt {}/{}). Error: {}",
+            url,
+            attempt + 1,
+            max_retries,
+            error,
+        )
 
         # If not on the last attempt, wait (2^attempt seconds), then retry
         if attempt < max_retries - 1:
