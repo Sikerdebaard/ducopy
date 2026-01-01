@@ -1,0 +1,278 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+          - custom
+      custom_version:
+        description: 'Custom version (e.g., 1.2.3 - only used if "custom" is selected)'
+        required: false
+        type: string
+      release_notes:
+        description: 'Release notes (optional - auto-generated from commits if empty)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-semantic-release packaging
+
+      - name: Get current version
+        id: get_version
+        run: |
+          CURRENT_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)".*/\1/')
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $CURRENT_VERSION"
+
+      - name: Determine version bump from commits
+        id: analyze_commits
+        if: github.event.inputs.release_type == 'auto'
+        run: |
+          python << 'EOF'
+          import re
+          import subprocess
+          import sys
+          
+          # Get commits since last tag
+          try:
+              result = subprocess.run(
+                  ['git', 'log', '--pretty=format:%s', 'HEAD^..HEAD'],
+                  capture_output=True, text=True, check=True
+              )
+              commits = result.stdout.strip().split('\n')
+          except subprocess.CalledProcessError:
+              commits = []
+          
+          breaking_change = False
+          has_feat = False
+          has_fix = False
+          
+          for commit in commits:
+              if not commit:
+                  continue
+              # Check for BREAKING CHANGE
+              if 'BREAKING CHANGE' in commit or commit.startswith('!'):
+                  breaking_change = True
+              # Check for feat:
+              if re.match(r'^feat(\(.*\))?:', commit):
+                  has_feat = True
+              # Check for fix:
+              if re.match(r'^fix(\(.*\))?:', commit):
+                  has_fix = True
+          
+          if breaking_change:
+              bump_type = 'major'
+          elif has_feat:
+              bump_type = 'minor'
+          elif has_fix:
+              bump_type = 'patch'
+          else:
+              bump_type = 'patch'  # Default to patch
+          
+          print(f"Detected bump type: {bump_type}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"bump_type={bump_type}\n")
+          EOF
+
+      - name: Calculate new version
+        id: calc_version
+        run: |
+          python << 'EOF'
+          import re
+          import os
+          from packaging.version import Version, parse
+          
+          current = "${{ steps.get_version.outputs.current_version }}"
+          release_type = "${{ github.event.inputs.release_type }}"
+          custom = "${{ github.event.inputs.custom_version }}"
+          auto_bump = "${{ steps.analyze_commits.outputs.bump_type }}"
+          
+          # Handle custom version
+          if release_type == "custom":
+              new_version = custom
+          else:
+              # Try to parse as semantic version
+              try:
+                  v = parse(current)
+                  if isinstance(v, Version):
+                      major, minor, micro = v.major, v.minor, v.micro
+                  else:
+                      # Not a proper semantic version, convert integer to semver
+                      major, minor, micro = 0, int(current), 0
+              except:
+                  # Fallback: treat as integer and convert to semver
+                  major, minor, micro = 0, int(current), 0
+              
+              # Determine bump type
+              if release_type == "auto":
+                  bump = auto_bump if auto_bump else "patch"
+              else:
+                  bump = release_type
+              
+              # Apply version bump
+              if bump == "major":
+                  major += 1
+                  minor = 0
+                  micro = 0
+              elif bump == "minor":
+                  minor += 1
+                  micro = 0
+              elif bump == "patch":
+                  micro += 1
+              
+              new_version = f"{major}.{minor}.{micro}"
+          
+          print(f"New version: {new_version}")
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"new_version={new_version}\n")
+          EOF
+
+      - name: Update version in pyproject.toml
+        run: |
+          NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
+          sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          rm pyproject.toml.bak || true
+          echo "Updated pyproject.toml to version $NEW_VERSION"
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit version bump
+        run: |
+          NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
+          git add pyproject.toml
+          git commit -m "Bump version to $NEW_VERSION"
+          git push origin ${{ github.ref_name }}
+
+      - name: Create Git tag
+        run: |
+          NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
+          git tag "v$NEW_VERSION"
+          git push origin "v$NEW_VERSION"
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          python << 'EOF'
+          import subprocess
+          import os
+          import re
+          
+          new_version = "${{ steps.calc_version.outputs.new_version }}"
+          current_version = "${{ steps.get_version.outputs.current_version }}"
+          custom_notes = """${{ github.event.inputs.release_notes }}"""
+          
+          if custom_notes.strip():
+              notes = custom_notes
+          else:
+              # Generate from commits using conventional commits format
+              try:
+                  result = subprocess.run(
+                      ['git', 'log', f'v{current_version}..HEAD', '--pretty=format:%s'],
+                      capture_output=True, text=True, check=True
+                  )
+                  commits = result.stdout.strip().split('\n') if result.stdout.strip() else []
+              except subprocess.CalledProcessError:
+                  # No previous tag, get last 20 commits
+                  result = subprocess.run(
+                      ['git', 'log', '--pretty=format:%s', '-20'],
+                      capture_output=True, text=True, check=True
+                  )
+                  commits = result.stdout.strip().split('\n')
+              
+              features = []
+              fixes = []
+              breaking = []
+              other = []
+              
+              for commit in commits:
+                  if not commit:
+                      continue
+                  
+                  # Parse conventional commit format
+                  if 'BREAKING CHANGE' in commit or commit.startswith('!'):
+                      breaking.append(commit)
+                  elif re.match(r'^feat(\(.*\))?:', commit):
+                      features.append(re.sub(r'^feat(\(.*\))?:\s*', '', commit))
+                  elif re.match(r'^fix(\(.*\))?:', commit):
+                      fixes.append(re.sub(r'^fix(\(.*\))?:\s*', '', commit))
+                  else:
+                      other.append(commit)
+              
+              notes = f"## Release v{new_version}\n\n"
+              
+              if breaking:
+                  notes += "### ⚠️ BREAKING CHANGES\n\n"
+                  for item in breaking:
+                      notes += f"- {item}\n"
+                  notes += "\n"
+              
+              if features:
+                  notes += "### ✨ Features\n\n"
+                  for item in features:
+                      notes += f"- {item}\n"
+                  notes += "\n"
+              
+              if fixes:
+                  notes += "### 🐛 Bug Fixes\n\n"
+                  for item in fixes:
+                      notes += f"- {item}\n"
+                  notes += "\n"
+              
+              if other and (not features and not fixes and not breaking):
+                  notes += "### 📝 Changes\n\n"
+                  for item in other[:10]:  # Limit to 10 items
+                      notes += f"- {item}\n"
+          
+          # Write to output
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write("notes<<EOF\n")
+              f.write(notes)
+              f.write("\nEOF\n")
+          EOF
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.calc_version.outputs.new_version }}
+          release_name: v${{ steps.calc_version.outputs.new_version }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease }}
