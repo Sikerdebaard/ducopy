@@ -34,9 +34,9 @@
 # SOFTWARE.
 #
 from ducopy.ducopy import (
-    DucoPy,
-    NodesResponse,
-    NodeInfo,
-    ConfigNodeResponse,
-    ActionsResponse,
-)  # noqa: F401
+    DucoPy as DucoPy,
+    NodesResponse as NodesResponse,
+    NodeInfo as NodeInfo,
+    ConfigNodeResponse as ConfigNodeResponse,
+    ActionsResponse as ActionsResponse,
+)
