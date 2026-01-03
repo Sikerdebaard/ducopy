@@ -52,26 +52,38 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
     A unified validator decorator for Pydantic 1.x and 2.x.
     Ensures that user-defined validators run before field-level validation,
     allowing data transformations to occur first (e.g. extracting `.Val`).
+    
+    User functions should use 'self' as the first parameter (following Python conventions),
+    and this decorator will handle the transformation to work with Pydantic's class-level validators.
     """
 
     def decorator(user_func):  # noqa: ANN001, ANN202
         """
-        `user_func` is the actual validation function (e.g. `def validate_something(cls, values): ...`)
+        `user_func` is the actual validation function (e.g. `def validate_something(self, values): ...`)
+        We transform it to work with Pydantic's class-level validators which expect 'cls'.
         """
 
-        @wraps(user_func)
+        # Create a wrapper that will be used as a classmethod
         def wrapper(cls, values):  # noqa: ANN202, ANN001
             # Call the user function to transform 'values' as needed
+            # We pass cls even though user_func parameter is named 'self'
+            # The parameter name is just a convention and doesn't affect functionality
             return user_func(cls, values)
+        
+        # Preserve the original function's metadata
+        wrapper.__name__ = user_func.__name__
+        wrapper.__qualname__ = user_func.__qualname__
 
         if PYDANTIC_V2:
             # For Pydantic 2.x, we must set mode="before" to run prior to field validation
             ukwargs.setdefault("mode", "before")
-            return model_validator(*uargs, **ukwargs)(wrapper)
+            # Wrap as classmethod before passing to model_validator
+            return model_validator(*uargs, **ukwargs)(classmethod(wrapper))
         else:
             # For Pydantic 1.x, we must set pre=True to run prior to field validation
             ukwargs.setdefault("pre", True)
-            return root_validator(*uargs, **ukwargs)(wrapper)
+            # Wrap as classmethod before passing to root_validator
+            return root_validator(*uargs, **ukwargs)(classmethod(wrapper))
 
     return decorator
 
@@ -91,7 +103,7 @@ class ParameterConfig(BaseModel):
     Inc: int | None = None
 
     @unified_validator()
-    def ensure_keys(cls, values: dict) -> dict:
+    def ensure_keys(self, values: dict) -> dict:
         # Ensure all expected keys are present, set to None if not
         keys = ["Id", "Val", "Min", "Max", "Inc"]
         return {key: values.get(key) for key in keys}
@@ -133,7 +145,7 @@ class NodeGeneralInfo(BaseModel):
 
     @unified_validator()
     def validate_addr(
-        cls, values: dict[str, dict | str | int]
+        self, values: dict[str, dict | str | int]
     ) -> dict[str, dict | str | int]:
         values["Addr"] = extract_val(values.get("Addr", {}))
         return values
@@ -144,7 +156,7 @@ class NetworkDucoInfo(BaseModel):
 
     @unified_validator()
     def validate_comm_error_ctr(
-        cls, values: dict[str, dict | str | int]
+        self, values: dict[str, dict | str | int]
     ) -> dict[str, dict | str | int]:
         values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
         return values
@@ -160,7 +172,7 @@ class VentilationInfo(BaseModel):
 
     @unified_validator()
     def validate_ventilation_fields(
-        cls, values: dict[str, dict | str | int]
+        self, values: dict[str, dict | str | int]
     ) -> dict[str, dict | str | int]:
         fields_to_extract = [
             "FlowLvlOvrl",
@@ -196,7 +208,7 @@ class SensorData(BaseModel):
     data: dict[str, int | float | str] | None = Field(default_factory=dict)
 
     @unified_validator()
-    def extract_sensor_values(cls, values: dict[str, Any]) -> dict[str, Any]:
+    def extract_sensor_values(self, values: dict[str, Any]) -> dict[str, Any]:
         # Iterate over all fields and extract their `Val` if they have it
         values["data"] = {key: extract_val(value) for key, value in values.items()}
         return values
@@ -266,7 +278,7 @@ class ActionInfo(BaseModel):
 
     @unified_validator()
     def set_optional_enum(
-        cls, values: dict[str, dict | str | int]
+        self, values: dict[str, dict | str | int]
     ) -> dict[str, dict | str | int]:
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":
