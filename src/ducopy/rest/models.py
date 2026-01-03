@@ -52,17 +52,43 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
     A unified validator decorator for Pydantic 1.x and 2.x.
     Ensures that user-defined validators run before field-level validation,
     allowing data transformations to occur first (e.g. extracting `.Val`).
+
+    Validator methods should be defined as classmethods using @classmethod decorator.
+    
+    Example usage:
+        @unified_validator()
+        @classmethod
+        def validate_something(cls, values):
+            # Transformation logic here
+            return values
     """
 
     def decorator(user_func):  # noqa: ANN001, ANN202
         """
-        `user_func` is the actual validation function (e.g. `def validate_something(cls, values): ...`)
+        `user_func` is the actual validation function (e.g. `@classmethod def validate_something(cls, values): ...`)
         """
+        # Handle both regular functions and classmethods
+        # Decorator stacking: When decorators are stacked like:
+        #   @unified_validator()
+        #   @classmethod
+        #   def validate_addr(cls, values): ...
+        # 
+        # Python applies them bottom-up, so @classmethod wraps the function first,
+        # then @unified_validator() receives a classmethod object.
+        # We need to extract the underlying function (__func__) to properly wrap it.
+        # 
+        # Note: This assumes @classmethod is the immediate decorator before the function.
+        # If other decorators are between @unified_validator() and @classmethod, they should
+        # be applied after @classmethod instead.
+        if isinstance(user_func, classmethod):
+            actual_func = user_func.__func__
+        else:
+            actual_func = user_func
 
-        @wraps(user_func)
+        @wraps(actual_func)
         def wrapper(cls, values):  # noqa: ANN202, ANN001
             # Call the user function to transform 'values' as needed
-            return user_func(cls, values)
+            return actual_func(cls, values)
 
         if PYDANTIC_V2:
             # For Pydantic 2.x, we must set mode="before" to run prior to field validation
@@ -91,6 +117,7 @@ class ParameterConfig(BaseModel):
     Inc: int | None = None
 
     @unified_validator()
+    @classmethod
     def ensure_keys(cls, values: dict) -> dict:
         # Ensure all expected keys are present, set to None if not
         keys = ["Id", "Val", "Min", "Max", "Inc"]
@@ -132,9 +159,8 @@ class NodeGeneralInfo(BaseModel):
     Addr: int = Field(...)
 
     @unified_validator()
-    def validate_addr(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    @classmethod
+    def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["Addr"] = extract_val(values.get("Addr", {}))
         return values
 
@@ -143,9 +169,8 @@ class NetworkDucoInfo(BaseModel):
     CommErrorCtr: int = Field(...)
 
     @unified_validator()
-    def validate_comm_error_ctr(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    @classmethod
+    def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
         return values
 
@@ -159,9 +184,8 @@ class VentilationInfo(BaseModel):
     FlowLvlTgt: int | None = None
 
     @unified_validator()
-    def validate_ventilation_fields(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    @classmethod
+    def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         fields_to_extract = [
             "FlowLvlOvrl",
             "TimeStateRemain",
@@ -196,6 +220,7 @@ class SensorData(BaseModel):
     data: dict[str, int | float | str] | None = Field(default_factory=dict)
 
     @unified_validator()
+    @classmethod
     def extract_sensor_values(cls, values: dict[str, Any]) -> dict[str, Any]:
         # Iterate over all fields and extract their `Val` if they have it
         values["data"] = {key: extract_val(value) for key, value in values.items()}
@@ -265,9 +290,8 @@ class ActionInfo(BaseModel):
     Enum: list[str] | None  # Keep Enum optional
 
     @unified_validator()
-    def set_optional_enum(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    @classmethod
+    def set_optional_enum(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":
             values["Enum"] = None  # Ensure Enum is set to None if not required
