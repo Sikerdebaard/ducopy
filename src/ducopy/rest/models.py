@@ -34,17 +34,25 @@
 # SOFTWARE.
 #
 # ensure pydantic 1 and 2 support since HA is in a transition phase
-try:
-    from pydantic import BaseModel, Field, root_validator
-
-    PYDANTIC_V2 = False
-except ImportError:
-    from pydantic import BaseModel, Field, model_validator
-
-    PYDANTIC_V2 = True
-
+from pydantic import BaseModel, Field
 from typing import Any, Literal
 from functools import wraps
+
+try:
+    from pydantic import VERSION
+    PYDANTIC_V2 = int(VERSION.split('.')[0]) >= 2
+except (ImportError, AttributeError):
+    # Fallback: try importing model_validator which only exists in V2
+    try:
+        from pydantic import model_validator
+        PYDANTIC_V2 = True
+    except ImportError:
+        PYDANTIC_V2 = False
+
+if PYDANTIC_V2:
+    from pydantic import model_validator
+else:
+    from pydantic import root_validator
 
 
 def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
@@ -117,6 +125,13 @@ class NodeConfig(BaseModel):
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
 
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        if "node" in values and "Node" not in values:
+            values["Node"] = values.pop("node")
+        return values
+
 
 class NodesResponse(BaseModel):
     Nodes: list[NodeConfig]
@@ -129,26 +144,46 @@ class GeneralInfo(BaseModel):
 
 class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
-    Addr: int = Field(...)
+    Addr: int | None = None
 
     @unified_validator()
     def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["Addr"] = extract_val(values.get("Addr", {}))
+        addr_value = values.get("Addr", {})
+        # Handle empty dict from connectivity boards
+        if addr_value == {}:
+            values["Addr"] = None
+        else:
+            values["Addr"] = extract_val(addr_value)
         return values
 
 
 class NetworkDucoInfo(BaseModel):
-    CommErrorCtr: int = Field(...)
+    CommErrorCtr: int | None = None
+    # Network topology fields from Communication and Print Board
+    Subtype: int | None = None
+    Sub: int | None = None
+    Prnt: int | None = None
+    Asso: int | None = None
+    RssiN2M: int | None = None  # RSSI node to master
+    HopVia: int | None = None
+    RssiN2H: int | None = None  # RSSI node to hop
+    Show: int | None = None
+    Link: int | None = None
 
     @unified_validator()
     def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
+        comm_error_value = values.get("CommErrorCtr", {})
+        # Handle empty dict from connectivity boards
+        if comm_error_value == {}:
+            values["CommErrorCtr"] = None
+        else:
+            values["CommErrorCtr"] = extract_val(comm_error_value)
         return values
 
 
 class VentilationInfo(BaseModel):
     State: str | None = None
-    FlowLvlOvrl: int = Field(...)
+    FlowLvlOvrl: int | None = None
     TimeStateRemain: int | None = None
     TimeStateEnd: int | None = None
     Mode: str | None = None
@@ -192,8 +227,8 @@ class SensorData(BaseModel):
 class NodeInfo(BaseModel):
     Node: int
     General: NodeGeneralInfo
-    NetworkDuco: NetworkDucoInfo | None
-    Ventilation: VentilationInfo | None
+    NetworkDuco: NetworkDucoInfo | None = None
+    Ventilation: VentilationInfo | None = None
     Sensor: SensorData | None = Field(default=None)
 
 
@@ -221,6 +256,13 @@ class ConfigNodeResponse(BaseModel):
     SwitchMode: ParameterConfig | None = None
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
+
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        if "node" in values and "Node" not in values:
+            values["Node"] = values.pop("node")
+        return values
 
 
 class ConfigNodeRequest(BaseModel):
@@ -265,5 +307,6 @@ class ActionsResponse(BaseModel):
 
 
 class ActionsChangeResponse(BaseModel):
-    Code: int
+    Code: int | None = None
     Result: str
+    Action: str | None = None

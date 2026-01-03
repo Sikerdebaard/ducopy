@@ -11,7 +11,15 @@ def client() -> APIClient:
     if not duco_ip:
         pytest.skip("DUCOBOX_IP environment variable is not set, skipping tests.")
 
-    base_url = f"https://{duco_ip}"
+    # Support both full URLs and IP addresses
+    # If DUCOBOX_IP already has a protocol, use it as-is
+    # Otherwise, try HTTPS first (for Connectivity Board), fallback to HTTP (for Communication Board)
+    if duco_ip.startswith("http://") or duco_ip.startswith("https://"):
+        base_url = duco_ip
+    else:
+        # Default to HTTPS for Connectivity Board
+        base_url = f"https://{duco_ip}"
+    
     client = APIClient(base_url=base_url, verify=True)  # SSL verification enabled
     yield client
     client.close()
@@ -24,7 +32,15 @@ def client_insecure() -> APIClient:
     if not duco_ip:
         pytest.skip("DUCOBOX_IP environment variable is not set, skipping tests.")
 
-    base_url = f"https://{duco_ip}"
+    # Support both full URLs and IP addresses
+    # If DUCOBOX_IP already has a protocol, use it as-is
+    # Otherwise, try HTTPS first (for Connectivity Board), fallback to HTTP (for Communication Board)
+    if duco_ip.startswith("http://") or duco_ip.startswith("https://"):
+        base_url = duco_ip
+    else:
+        # Default to HTTPS for Connectivity Board
+        base_url = f"https://{duco_ip}"
+    
     client = APIClient(base_url=base_url, verify=False)  # SSL verification disabled
     yield client
     client.close()
@@ -88,32 +104,42 @@ def test_set_actions_node(client: APIClient) -> None:
     """Test setting actions for a specific node action with SSL verification."""
     set_action_response = client.post_action_node(action="SetVentilationState", value="MAN1", node_id=1)
     assert isinstance(set_action_response, ActionsChangeResponse), "Expected ActionsChangeResponse instance"
-    assert set_action_response.Code == 0, "Action response code should be 0"
-    assert set_action_response.Result == "SUCCESS", "Action response result should be SUCCESS"
+    # Code field is optional, check if present
+    if set_action_response.Code is not None:
+        assert set_action_response.Code == 0, "Action response code should be 0"
+    assert set_action_response.Result in ["SUCCESS", "Success"], "Action response result should be SUCCESS or Success"
 
 
 def test_set_actions_node_insecure(client_insecure: APIClient) -> None:
     """Test fetching configuration settings for a specific node with SSL verification."""
     set_action_response = client_insecure.post_action_node(action="SetVentilationState", value="MAN1", node_id=1)
     assert isinstance(set_action_response, ActionsChangeResponse), "Expected ActionsChangeResponse instance"
-    assert set_action_response.Code == 0, "Action response code should be 0"
-    assert set_action_response.Result == "SUCCESS", "Action response result should be SUCCESS"
+    # Code field is optional, check if present
+    if set_action_response.Code is not None:
+        assert set_action_response.Code == 0, "Action response code should be 0"
+    assert set_action_response.Result in ["SUCCESS", "Success"], "Action response result should be SUCCESS or Success"
 
 
 def test_get_logs(client: APIClient) -> None:
     """Test fetching API logs with SSL verification."""
+    if client.is_legacy_api:
+        pytest.skip("Logs are not available on Communication and Print Board (legacy API)")
     logs_response = client.get_logs()
     assert isinstance(logs_response, dict), "Logs response should be a dictionary"
 
 
 def test_get_logs_insecure(client_insecure: APIClient) -> None:
     """Test fetching API logs without SSL verification."""
+    if client_insecure.is_legacy_api:
+        pytest.skip("Logs are not available on Communication and Print Board (legacy API)")
     logs_response = client_insecure.get_logs()
     assert isinstance(logs_response, dict), "Logs response should be a dictionary"
 
 
 def test_get_actions_node(client: APIClient) -> None:
     """Test fetching available actions for a specific node with SSL verification."""
+    if client.is_legacy_api:
+        pytest.skip("Node actions are not available on Communication and Print Board (legacy API)")
     actions_response = client.get_actions_node(node_id=1)
     assert isinstance(actions_response, ActionsResponse), "Expected ActionsResponse instance"
     assert actions_response.Node == 1, "Actions response should match node ID 1"
@@ -121,6 +147,8 @@ def test_get_actions_node(client: APIClient) -> None:
 
 def test_get_actions_node_insecure(client_insecure: APIClient) -> None:
     """Test fetching available actions for a specific node without SSL verification."""
+    if client_insecure.is_legacy_api:
+        pytest.skip("Node actions are not available on Communication and Print Board (legacy API)")
     actions_response = client_insecure.get_actions_node(node_id=1)
     assert isinstance(actions_response, ActionsResponse), "Expected ActionsResponse instance"
     assert actions_response.Node == 1, "Actions response should match node ID 1"

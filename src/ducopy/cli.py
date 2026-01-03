@@ -40,9 +40,10 @@ import json
 import sys
 from typing import Any, Annotated
 from ducopy.ducopy import DucoPy
-from rich import print as rich_print
+from rich.console import Console
 from rich.pretty import Pretty
 from urllib.parse import urlparse
+import pprint
 
 from ducopy.rest.models import ConfigNodeRequest
 
@@ -72,13 +73,24 @@ def validate_url(url: str) -> str:
 
 def print_output(data: Any, format: str) -> None:  # noqa: ANN401
     """Print output in the specified format."""
-    if isinstance(data, BaseModel):  # Check if data is a Pydantic model instance
-        data = data.dict()  # Use `.dict()` for JSON serialization
+    # Recursively convert Pydantic models to dicts
+    def convert_to_dict(obj):
+        if isinstance(obj, BaseModel):
+            return obj.dict() if hasattr(obj, 'dict') else obj.model_dump()
+        elif isinstance(obj, dict):
+            return {k: convert_to_dict(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [convert_to_dict(item) for item in obj]
+        return obj
+    
+    data = convert_to_dict(data)
 
     if format == "json":
         typer.echo(json.dumps(data, indent=4))
     else:
-        rich_print(Pretty(data))
+        # Use Rich Console with wider width to keep NetworkDuco and similar dicts on one line
+        console = Console(width=200)
+        console.print(Pretty(data, expand_all=False))
 
 
 @app.callback()
@@ -207,18 +219,21 @@ def raw_patch(
 def change_action_node(
     base_url: str,
     node_id: int,
-    action: Annotated[str, typer.Option(help="The action key to include in the JSON body")],
-    value: Annotated[str, typer.Option(help="The value key to include in the JSON body")],
+    action: Annotated[str, typer.Option(help="The action key (Connectivity Board only, use any value for Communication and Print Board)")],
+    value: Annotated[str, typer.Option(help="The state/value to set (e.g., AUTO, MAN1, AUT1)")],
     format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
 ) -> None:
     """
-    Perform a POST action by sending a JSON body to the endpoint.
+    Change the action/state for a specific node.
+    
+    - Connectivity Board: Sends a POST request with JSON body to /action/nodes/{node_id}
+    - Communication and Print Board: Sends a GET request to /nodesetoperstate?node={node_id}&value={value}
 
     Args:
         base_url (str): The base URL of the API.
         node_id (int): The ID of the node to perform the action on.
-        action (str): The action key to include in the JSON body.
-        value (str): The value key to include in the JSON body.
+        action (str): The action key (used only for Connectivity Board validation).
+        value (str): The state/value to set (e.g., AUTO, MAN1, AUT1, MAN2, AUT2, etc.).
         format (str): Output format: pretty or json.
     """
     base_url = validate_url(base_url)
@@ -227,8 +242,8 @@ def change_action_node(
         response = facade.change_action_node(action=action, value=value, node_id=node_id)
         print_output(response, format)
     except Exception as e:
-        logger.error("Error performing POST action for node {}: {}", node_id, e)
-        typer.echo(f"Failed to perform POST action for node {node_id}: {e}")
+        logger.error("Error changing node action for node {}: {}", node_id, e)
+        typer.echo(f"Failed to change node action for node {node_id}: {e}")
         raise typer.Exit(code=1)
 
 
@@ -280,8 +295,26 @@ def get_config_nodes(
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
     try:
-        response = facade.get_config_nodes()
-        print_output(response, format)
+        # Get generation info
+        generation_info = {
+            "generation": facade.client.generation,
+            "board_type": facade.client.board_type,
+            "api_version": facade.client.api_version,
+            "public_api_version": facade.client.public_api_version,
+            "is_modern_api": facade.client.is_modern_api,
+            "is_legacy_api": facade.client.is_legacy_api,
+        }
+        
+        # Get config data
+        config_data = facade.get_config_nodes()
+        
+        # Combine both
+        output = {
+            "generation_info": generation_info,
+            "config_nodes": config_data,
+        }
+        
+        print_output(output, format)
     except Exception as e:
         logger.error("Error fetching configuration for all nodes: {}", str(e))
         typer.echo(f"Failed to fetch configuration for all nodes: {e}")
@@ -306,10 +339,30 @@ def get_info(
     parameter: str = None,
     format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
 ) -> None:
-    """Retrieve general API information with optional filters."""
+    """Retrieve general API information with optional filters. Also displays API generation info."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_info(module=module, submodule=submodule, parameter=parameter), format)
+    
+    # Get the generation info
+    generation_info = {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+    
+    # Get the regular info
+    info_data = facade.get_info(module=module, submodule=submodule, parameter=parameter)
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "api_info": info_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()
@@ -319,7 +372,27 @@ def get_nodes(
     """Retrieve list of all nodes."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_nodes(), format)
+    
+    # Get generation info
+    generation_info = {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+    
+    # Get nodes data
+    nodes_data = facade.get_nodes()
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "nodes": nodes_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()
@@ -329,7 +402,27 @@ def get_node_info(
     """Retrieve information for a specific node by ID."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_node_info(node_id=node_id), format)
+    
+    # Get generation info
+    generation_info = {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+    
+    # Get node info
+    node_data = facade.get_node_info(node_id=node_id)
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "node_info": node_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()
@@ -339,7 +432,27 @@ def get_config_node(
     """Retrieve configuration settings for a specific node."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_config_node(node_id=node_id), format)
+    
+    # Get generation info
+    generation_info = {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+    
+    # Get config data
+    config_data = facade.get_config_node(node_id=node_id)
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "config": config_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()
@@ -351,7 +464,27 @@ def get_action(
     """Retrieve action data with an optional filter."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_action(action=action), format)
+    
+    # Get generation info
+    generation_info = {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+    
+    # Get action data
+    action_data = facade.get_action(action=action)
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "action": action_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()
@@ -364,7 +497,27 @@ def get_actions_node(
     """Retrieve actions available for a specific node."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_actions_node(node_id=node_id, action=action), format)
+    
+    # Get generation info
+    generation_info = {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+    
+    # Get actions data
+    actions_data = facade.get_actions_node(node_id=node_id, action=action)
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "actions": actions_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()
@@ -375,6 +528,26 @@ def get_logs(
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
     print_output(facade.get_logs(), format)
+
+
+@app.command()
+def check_generation(
+    base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+) -> None:
+    """Check the board type (Connectivity Board or Communication and Print Board)."""
+    base_url = validate_url(base_url)
+    facade = DucoPy(base_url)
+    
+    generation_info = {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+    
+    print_output(generation_info, format)
 
 
 def entry_point() -> None:
