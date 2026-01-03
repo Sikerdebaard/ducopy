@@ -54,6 +54,13 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
     allowing data transformations to occur first (e.g. extracting `.Val`).
 
     Validator methods should be defined as classmethods using @classmethod decorator.
+    
+    Example usage:
+        @unified_validator()
+        @classmethod
+        def validate_something(cls, values):
+            # Transformation logic here
+            return values
     """
 
     def decorator(user_func):  # noqa: ANN001, ANN202
@@ -61,6 +68,8 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
         `user_func` is the actual validation function (e.g. `@classmethod def validate_something(cls, values): ...`)
         """
         # Handle both regular functions and classmethods
+        # When @classmethod is applied after @unified_validator(), Python passes a classmethod object
+        # We need to extract the underlying function to properly wrap it
         if isinstance(user_func, classmethod):
             actual_func = user_func.__func__
         else:
