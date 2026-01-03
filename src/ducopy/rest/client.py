@@ -305,6 +305,29 @@ class APIClient:
         
         return endpoint
 
+    def _transform_gen1_info(self, gen1_data: dict) -> dict:
+        """
+        Transform Communication and Print Board info response to Connectivity Board format.
+        Wraps all flat values in {"Val": value} structure to match modern API format.
+        
+        Args:
+            gen1_data: Legacy API response data with flat structure
+            
+        Returns:
+            dict: Transformed data with values wrapped in {"Val": value} format
+        """
+        def wrap_value(value):
+            """Wrap a value in {"Val": value} format if not None."""
+            if value is None:
+                return None
+            if isinstance(value, dict):
+                # Recursively wrap nested dicts
+                return {k: wrap_value(v) for k, v in value.items()}
+            return {"Val": value}
+        
+        # Recursively wrap all values in the data structure
+        return {k: wrap_value(v) for k, v in gen1_data.items()}
+    
     def _transform_gen1_node_info(self, gen1_data: dict) -> dict:
         """
         Transform Communication and Print Board node info response to Connectivity Board NodeInfo format.
@@ -660,7 +683,15 @@ class APIClient:
         response = self.session.get(endpoint, params=params)
         response.raise_for_status()
         logger.debug("Received general info from endpoint: {}", endpoint)
-        return response.json()
+        
+        data = response.json()
+        
+        # Transform legacy API response to match modern API format
+        if self._generation == "legacy":
+            logger.debug("Transforming legacy info response to modern format")
+            data = self._transform_gen1_info(data)
+        
+        return data
 
     def get_nodes(self) -> NodesInfoResponse:
         """Retrieve list of all nodes."""

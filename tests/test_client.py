@@ -249,3 +249,35 @@ def test_get_nodes_legacy(client: APIClient, mock_requests: requests_mock.Mocker
     response = client.get_nodes()
     assert isinstance(response, NodesInfoResponse)
     assert len(response.Nodes) == 3
+
+
+def test_get_info_legacy(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_info on Communication and Print Board with value wrapping."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Mock the legacy response format with flat values
+    mock_data = {
+        "General": {
+            "Time": 1730471603,
+            "SerialNumber": "ABC123"
+        },
+        "Network": {
+            "IpAddress": "192.168.1.100",
+            "MacAddress": "00:11:22:33:44:55"
+        }
+    }
+    mock_requests.get(f"{BASE_URL}/boxinfoget", json=mock_data)
+
+    response = client.get_info()
+    
+    # Verify the response has been transformed to {"Val": value} format
+    assert isinstance(response, dict)
+    assert "General" in response
+    assert "Time" in response["General"]
+    assert response["General"]["Time"] == {"Val": 1730471603}
+    assert response["General"]["SerialNumber"] == {"Val": "ABC123"}
+    assert "Network" in response
+    assert response["Network"]["IpAddress"] == {"Val": "192.168.1.100"}
+    assert response["Network"]["MacAddress"] == {"Val": "00:11:22:33:44:55"}
