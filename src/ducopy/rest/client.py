@@ -315,19 +315,46 @@ class APIClient:
         Connectivity Board format:
         {"Node": 4, "General": {"Type": {"Val": "..."}, "Addr": 0}, "Ventilation": {...}, ...}
         """
-        # Extract all sensor fields (snsr, co2, temp, rh, etc.)
+        # Network-related fields that should go to NetworkDuco
+        network_fields = {
+            "subtype": "Subtype",
+            "sub": "Sub",
+            "prnt": "Prnt",
+            "asso": "Asso",
+            "rssi_n2m": "RssiN2M",
+            "hop_via": "HopVia",
+            "rssi_n2h": "RssiN2H",
+            "show": "Show",
+            "link": "Link",
+        }
+        
+        # Extract all sensor fields (co2, temp, rh, etc.) - exclude snsr as it's metadata
         sensor_fields = {}
-        known_sensor_keys = ["snsr", "co2", "temp", "rh", "CO2", "Temp", "RH", "Snsr"]
+        # Map lowercase keys to proper capitalized names
+        sensor_key_mapping = {
+            "co2": "Co2",
+            "temp": "Temp",
+            "rh": "Rh"
+        }
+        known_sensor_keys = ["co2", "temp", "rh", "CO2", "Temp", "RH"]
         for key in known_sensor_keys:
             if key in gen1_data:
-                sensor_fields[key.lower()] = gen1_data[key]
+                normalized_key = key.lower()
+                proper_key = sensor_key_mapping.get(normalized_key, normalized_key.capitalize())
+                sensor_fields[proper_key] = gen1_data[key]
         
         # Also check for any other potential sensor fields by looking for numeric values
         # that aren't already captured in other sections
-        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode"}
+        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr"}
+        known_non_sensor_keys.update(network_fields.keys())  # Exclude network fields
         for key, value in gen1_data.items():
             if key not in known_non_sensor_keys and isinstance(value, (int, float)):
-                sensor_fields[key.lower()] = value
+                normalized_key = key.lower()
+                proper_key = sensor_key_mapping.get(normalized_key, normalized_key.capitalize())
+                sensor_fields[proper_key] = value
+        
+        # Remove zero values from sensor data
+        sensor_fields = {k: v for k, v in sensor_fields.items() if v != 0 and v != 0.0}
         
         return {
             "Node": gen1_data.get("node"),
@@ -339,7 +366,16 @@ class APIClient:
                 "Addr": gen1_data.get("addr", 0)
             },
             "NetworkDuco": {
-                "CommErrorCtr": gen1_data.get("cerr", 0)
+                "CommErrorCtr": gen1_data.get("cerr", 0),
+                "Subtype": gen1_data.get("subtype"),
+                "Sub": gen1_data.get("sub"),
+                "Prnt": gen1_data.get("prnt"),
+                "Asso": gen1_data.get("asso"),
+                "RssiN2M": gen1_data.get("rssi_n2m"),
+                "HopVia": gen1_data.get("hop_via"),
+                "RssiN2H": gen1_data.get("rssi_n2h"),
+                "Show": gen1_data.get("show"),
+                "Link": gen1_data.get("link"),
             } if gen1_data.get("cerr") is not None else None,
             "Ventilation": {
                 "State": gen1_data.get("state"),
@@ -347,7 +383,7 @@ class APIClient:
                 "TimeStateRemain": gen1_data.get("cntdwn") if gen1_data.get("cntdwn", 0) != 0 else None,
                 "TimeStateEnd": gen1_data.get("endtime") if gen1_data.get("endtime", 0) != 0 else None,
                 "Mode": gen1_data.get("mode") if gen1_data.get("mode") != "-" else None,
-                "FlowLvlTgt": None,  # Not available on Communication and Print Board
+                "FlowLvlTgt": gen1_data.get("trgt"),
             } if any(k in gen1_data for k in ["state", "ovrl", "mode"]) else None,
             "Sensor": sensor_fields if sensor_fields else None,
         }

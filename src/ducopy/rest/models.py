@@ -159,6 +159,16 @@ class NodeGeneralInfo(BaseModel):
 
 class NetworkDucoInfo(BaseModel):
     CommErrorCtr: int | None = None
+    # Network topology fields from Communication and Print Board
+    Subtype: int | None = None
+    Sub: int | None = None
+    Prnt: int | None = None
+    Asso: int | None = None
+    RssiN2M: int | None = None  # RSSI node to master
+    HopVia: int | None = None
+    RssiN2H: int | None = None  # RSSI node to hop
+    Show: int | None = None
+    Link: int | None = None
 
     @unified_validator()
     def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:

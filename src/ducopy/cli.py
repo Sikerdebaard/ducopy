@@ -40,9 +40,10 @@ import json
 import sys
 from typing import Any, Annotated
 from ducopy.ducopy import DucoPy
-from rich import print as rich_print
+from rich.console import Console
 from rich.pretty import Pretty
 from urllib.parse import urlparse
+import pprint
 
 from ducopy.rest.models import ConfigNodeRequest
 
@@ -87,7 +88,9 @@ def print_output(data: Any, format: str) -> None:  # noqa: ANN401
     if format == "json":
         typer.echo(json.dumps(data, indent=4))
     else:
-        rich_print(Pretty(data))
+        # Use Rich Console with wider width to keep NetworkDuco and similar dicts on one line
+        console = Console(width=200)
+        console.print(Pretty(data, expand_all=False))
 
 
 @app.callback()
