@@ -64,15 +64,19 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
         """
 
         # Create a wrapper that will be used as a classmethod
+        # Note: We don't use @wraps here because it would copy the 'self' parameter name,
+        # which would make Pydantic think this is an instance method
         def wrapper(cls, values):  # noqa: ANN202, ANN001
-            # Call the user function to transform 'values' as needed
-            # We pass cls even though user_func parameter is named 'self'
-            # The parameter name is just a convention and doesn't affect functionality
+            # Call the user function with cls as the first argument
+            # This works because the parameter name 'self' vs 'cls' is just a naming convention
             return user_func(cls, values)
         
-        # Preserve the original function's metadata
+        # Manually copy metadata without copying the signature
         wrapper.__name__ = user_func.__name__
         wrapper.__qualname__ = user_func.__qualname__
+        wrapper.__module__ = user_func.__module__
+        wrapper.__doc__ = user_func.__doc__
+        wrapper.__annotations__ = user_func.__annotations__
 
         if PYDANTIC_V2:
             # For Pydantic 2.x, we must set mode="before" to run prior to field validation
