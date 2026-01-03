@@ -136,26 +136,36 @@ class GeneralInfo(BaseModel):
 
 class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
-    Addr: int = Field(...)
+    Addr: int | None = None
 
     @unified_validator()
     def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["Addr"] = extract_val(values.get("Addr", {}))
+        addr_value = values.get("Addr", {})
+        # Handle empty dict from connectivity boards
+        if addr_value == {}:
+            values["Addr"] = None
+        else:
+            values["Addr"] = extract_val(addr_value)
         return values
 
 
 class NetworkDucoInfo(BaseModel):
-    CommErrorCtr: int = Field(...)
+    CommErrorCtr: int | None = None
 
     @unified_validator()
     def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
+        comm_error_value = values.get("CommErrorCtr", {})
+        # Handle empty dict from connectivity boards
+        if comm_error_value == {}:
+            values["CommErrorCtr"] = None
+        else:
+            values["CommErrorCtr"] = extract_val(comm_error_value)
         return values
 
 
 class VentilationInfo(BaseModel):
     State: str | None = None
-    FlowLvlOvrl: int = Field(...)
+    FlowLvlOvrl: int | None = None
     TimeStateRemain: int | None = None
     TimeStateEnd: int | None = None
     Mode: str | None = None
@@ -199,8 +209,8 @@ class SensorData(BaseModel):
 class NodeInfo(BaseModel):
     Node: int
     General: NodeGeneralInfo
-    NetworkDuco: NetworkDucoInfo | None
-    Ventilation: VentilationInfo | None
+    NetworkDuco: NetworkDucoInfo | None = None
+    Ventilation: VentilationInfo | None = None
     Sensor: SensorData | None = Field(default=None)
 
 
