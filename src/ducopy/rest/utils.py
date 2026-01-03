@@ -41,6 +41,8 @@ from collections.abc import Callable
 import time
 from ducopy.rest.apikeygenerator import ApiKeyGenerator
 from loguru import logger
+import urllib3
+import warnings
 
 
 # Map the URL to the expected hostname in the certificate
@@ -93,6 +95,10 @@ class DucoUrlSession(requests.Session):
             self.mount("http://", adapter)
         else:
             self.verify = verify
+            # Suppress InsecureRequestWarning when SSL verification is intentionally disabled
+            if not verify:
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
         self.api_key: str | None = None
         self.api_key_timestamp: float = 0.0
