@@ -50,7 +50,7 @@ jobs:
           python -m twine upload --repository testpypi dist/*
 
       - name: Publish to PyPI
-        if: github.event_name == 'release' || github.event.inputs.environment == 'pypi'
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'pypi')
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}

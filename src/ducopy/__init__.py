@@ -34,9 +34,17 @@
 # SOFTWARE.
 #
 from ducopy.ducopy import (
-    DucoPy as DucoPy,
-    NodesResponse as NodesResponse,
-    NodeInfo as NodeInfo,
-    ConfigNodeResponse as ConfigNodeResponse,
-    ActionsResponse as ActionsResponse,
+    DucoPy,
+    NodesResponse,
+    NodeInfo,
+    ConfigNodeResponse,
+    ActionsResponse,
 )
+
+__all__ = [
+    "DucoPy",
+    "NodesResponse",
+    "NodeInfo",
+    "ConfigNodeResponse",
+    "ActionsResponse",
+]

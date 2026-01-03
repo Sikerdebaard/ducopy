@@ -65,14 +65,28 @@ jobs:
           import re
           import subprocess
           import sys
+          import os
           
           # Get commits since last tag
+          log_range = 'HEAD'
           try:
-              result = subprocess.run(
-                  ['git', 'log', '--pretty=format:%s', 'HEAD^..HEAD'],
+              describe_result = subprocess.run(
+                  ['git', 'describe', '--tags', '--abbrev=0'],
                   capture_output=True, text=True, check=True
               )
-              commits = result.stdout.strip().split('\n')
+              last_tag = describe_result.stdout.strip()
+              if last_tag:
+                  log_range = f'{last_tag}..HEAD'
+          except subprocess.CalledProcessError:
+              # No tags found or describe failed; fall back to analyzing commits reachable from HEAD
+              pass
+          
+          try:
+              result = subprocess.run(
+                  ['git', 'log', '--pretty=format:%s', log_range],
+                  capture_output=True, text=True, check=True
+              )
+              commits = result.stdout.strip().split('\n') if result.stdout.strip() else []
           except subprocess.CalledProcessError:
               commits = []
           
@@ -132,7 +146,7 @@ jobs:
                   else:
                       # Not a proper semantic version, convert integer to semver
                       major, minor, micro = 0, int(current), 0
-              except:
+              except Exception:
                   # Fallback: treat as integer and convert to semver
                   major, minor, micro = 0, int(current), 0
               
@@ -163,10 +177,23 @@ jobs:
       - name: Update version in pyproject.toml
         run: |
           NEW_VERSION="${{ steps.calc_version.outputs.new_version }}"
-          sed -i.bak "s/^version = \".*\"/version = \"$NEW_VERSION\"/" pyproject.toml
-          rm pyproject.toml.bak || true
-          echo "Updated pyproject.toml to version $NEW_VERSION"
+          python << EOF
+          import re
+          from pathlib import Path
 
+          new_version = "${NEW_VERSION}"
+          path = Path("pyproject.toml")
+          text = path.read_text(encoding="utf-8")
+
+          pattern = re.compile(r'^(version\\s*=\\s*")[^"]*(")', re.MULTILINE)
+          new_text, count = pattern.subn(rf'\1{new_version}\2', text)
+
+          if count == 0:
+              raise SystemExit("No version line found in pyproject.toml to update.")
+
+          path.write_text(new_text, encoding="utf-8")
+          print(f"Updated pyproject.toml to version {new_version}")
+          EOF
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
