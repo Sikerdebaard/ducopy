@@ -329,6 +329,7 @@ class APIClient:
         }
         
         # Extract all sensor fields (co2, temp, rh, etc.) - exclude snsr as it's metadata
+        # Wrap values in {"Val": value} format to match Connectivity Board structure
         sensor_fields = {}
         # Map lowercase keys to proper capitalized names
         sensor_key_mapping = {
@@ -341,7 +342,7 @@ class APIClient:
             if key in gen1_data:
                 normalized_key = key.lower()
                 proper_key = sensor_key_mapping.get(normalized_key, normalized_key.capitalize())
-                sensor_fields[proper_key] = gen1_data[key]
+                sensor_fields[proper_key] = {"Val": gen1_data[key]}
         
         # Also check for any other potential sensor fields by looking for numeric values
         # that aren't already captured in other sections
@@ -351,10 +352,10 @@ class APIClient:
             if key not in known_non_sensor_keys and isinstance(value, (int, float)):
                 normalized_key = key.lower()
                 proper_key = sensor_key_mapping.get(normalized_key, normalized_key.capitalize())
-                sensor_fields[proper_key] = value
+                sensor_fields[proper_key] = {"Val": value}
         
-        # Remove zero values from sensor data
-        sensor_fields = {k: v for k, v in sensor_fields.items() if v != 0 and v != 0.0}
+        # Remove zero values from sensor data (check the Val inside the dict)
+        sensor_fields = {k: v for k, v in sensor_fields.items() if v.get("Val") != 0 and v.get("Val") != 0.0}
         
         return {
             "Node": gen1_data.get("node"),
@@ -363,27 +364,27 @@ class APIClient:
                     "Id": None,
                     "Val": gen1_data.get("devtype", "UNKN")
                 },
-                "Addr": gen1_data.get("addr", 0)
+                "Addr": {"Val": gen1_data.get("addr", 0)} if gen1_data.get("addr") is not None else None
             },
             "NetworkDuco": {
-                "CommErrorCtr": gen1_data.get("cerr", 0),
-                "Subtype": gen1_data.get("subtype"),
-                "Sub": gen1_data.get("sub"),
-                "Prnt": gen1_data.get("prnt"),
-                "Asso": gen1_data.get("asso"),
-                "RssiN2M": gen1_data.get("rssi_n2m"),
-                "HopVia": gen1_data.get("hop_via"),
-                "RssiN2H": gen1_data.get("rssi_n2h"),
-                "Show": gen1_data.get("show"),
-                "Link": gen1_data.get("link"),
+                "CommErrorCtr": {"Val": gen1_data.get("cerr", 0)} if gen1_data.get("cerr") is not None else None,
+                "Subtype": {"Val": gen1_data.get("subtype")} if gen1_data.get("subtype") is not None else None,
+                "Sub": {"Val": gen1_data.get("sub")} if gen1_data.get("sub") is not None else None,
+                "Prnt": {"Val": gen1_data.get("prnt")} if gen1_data.get("prnt") is not None else None,
+                "Asso": {"Val": gen1_data.get("asso")} if gen1_data.get("asso") is not None else None,
+                "RssiN2M": {"Val": gen1_data.get("rssi_n2m")} if gen1_data.get("rssi_n2m") is not None else None,
+                "HopVia": {"Val": gen1_data.get("hop_via")} if gen1_data.get("hop_via") is not None else None,
+                "RssiN2H": {"Val": gen1_data.get("rssi_n2h")} if gen1_data.get("rssi_n2h") is not None else None,
+                "Show": {"Val": gen1_data.get("show")} if gen1_data.get("show") is not None else None,
+                "Link": {"Val": gen1_data.get("link")} if gen1_data.get("link") is not None else None,
             } if gen1_data.get("cerr") is not None else None,
             "Ventilation": {
-                "State": gen1_data.get("state"),
-                "FlowLvlOvrl": gen1_data.get("ovrl", 0),
-                "TimeStateRemain": gen1_data.get("cntdwn") if gen1_data.get("cntdwn", 0) != 0 else None,
-                "TimeStateEnd": gen1_data.get("endtime") if gen1_data.get("endtime", 0) != 0 else None,
-                "Mode": gen1_data.get("mode") if gen1_data.get("mode") != "-" else None,
-                "FlowLvlTgt": gen1_data.get("trgt"),
+                "State": {"Val": gen1_data.get("state")} if gen1_data.get("state") else None,
+                "FlowLvlOvrl": {"Val": gen1_data.get("ovrl", 0)} if gen1_data.get("ovrl") is not None else None,
+                "TimeStateRemain": {"Val": gen1_data.get("cntdwn")} if gen1_data.get("cntdwn", 0) != 0 else None,
+                "TimeStateEnd": {"Val": gen1_data.get("endtime")} if gen1_data.get("endtime", 0) != 0 else None,
+                "Mode": {"Val": gen1_data.get("mode")} if gen1_data.get("mode") and gen1_data.get("mode") != "-" else None,
+                "FlowLvlTgt": {"Val": gen1_data.get("trgt")} if gen1_data.get("trgt") is not None else None,
             } if any(k in gen1_data for k in ["state", "ovrl", "mode"]) else None,
             "Sensor": sensor_fields if sensor_fields else None,
         }
