@@ -34,17 +34,25 @@
 # SOFTWARE.
 #
 # ensure pydantic 1 and 2 support since HA is in a transition phase
-try:
-    from pydantic import BaseModel, Field, root_validator
-
-    PYDANTIC_V2 = False
-except ImportError:
-    from pydantic import BaseModel, Field, model_validator
-
-    PYDANTIC_V2 = True
-
+from pydantic import BaseModel, Field
 from typing import Any, Literal
 from functools import wraps
+
+try:
+    from pydantic import VERSION
+    PYDANTIC_V2 = int(VERSION.split('.')[0]) >= 2
+except (ImportError, AttributeError):
+    # Fallback: try importing model_validator which only exists in V2
+    try:
+        from pydantic import model_validator
+        PYDANTIC_V2 = True
+    except ImportError:
+        PYDANTIC_V2 = False
+
+if PYDANTIC_V2:
+    from pydantic import model_validator
+else:
+    from pydantic import root_validator
 
 
 def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003

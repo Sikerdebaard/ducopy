@@ -83,10 +83,7 @@ class APIClient:
         
         # Automatically detect generation if requested
         if auto_detect:
-            try:
-                self.detect_generation()
-            except Exception as e:
-                logger.warning("Failed to auto-detect API generation: {}", e)
+            self.detect_generation()
 
     def _duco_pem(self) -> str:
         """Enable certificate pinning."""
@@ -167,6 +164,14 @@ class APIClient:
                 "HTTPS" if is_https else "HTTP",
                 self._board_type
             )
+            
+            # Warn if modern API is being accessed via HTTP
+            if self._generation == "modern" and not is_https:
+                logger.warning(
+                    "Connectivity Board detected but connected via HTTP. "
+                    "For better security, consider using HTTPS instead: https://{}", 
+                    str(self.base_url).replace("http://", "").rstrip("/")
+                )
             
             return {
                 "generation": self._generation,
