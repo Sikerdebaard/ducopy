@@ -68,8 +68,18 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
         `user_func` is the actual validation function (e.g. `@classmethod def validate_something(cls, values): ...`)
         """
         # Handle both regular functions and classmethods
-        # When @classmethod is applied after @unified_validator(), Python passes a classmethod object
-        # We need to extract the underlying function to properly wrap it
+        # Decorator stacking: When decorators are stacked like:
+        #   @unified_validator()
+        #   @classmethod
+        #   def validate_addr(cls, values): ...
+        # 
+        # Python applies them bottom-up, so @classmethod wraps the function first,
+        # then @unified_validator() receives a classmethod object.
+        # We need to extract the underlying function (__func__) to properly wrap it.
+        # 
+        # Note: This assumes @classmethod is the immediate decorator before the function.
+        # If other decorators are between @unified_validator() and @classmethod, they should
+        # be applied after @classmethod instead.
         if isinstance(user_func, classmethod):
             actual_func = user_func.__func__
         else:
