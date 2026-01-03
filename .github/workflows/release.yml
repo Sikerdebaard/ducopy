@@ -136,7 +136,14 @@ jobs:
           
           # Handle custom version
           if release_type == "custom":
-              new_version = custom
+              # Validate custom version
+              try:
+                  parsed = parse(custom)
+                  if not isinstance(parsed, Version):
+                      raise ValueError(f"Invalid version format: {custom}")
+                  new_version = custom
+              except Exception as e:
+                  raise ValueError(f"Invalid custom version '{custom}': {e}")
           else:
               # Try to parse as semantic version
               try:
