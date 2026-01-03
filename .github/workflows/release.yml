@@ -127,7 +127,7 @@ jobs:
           python << 'EOF'
           import re
           import os
-          from packaging.version import Version, parse
+          from packaging.version import Version, parse, InvalidVersion
           
           current = "${{ steps.get_version.outputs.current_version }}"
           release_type = "${{ github.event.inputs.release_type }}"
@@ -138,11 +138,9 @@ jobs:
           if release_type == "custom":
               # Validate custom version
               try:
-                  parsed = parse(custom)
-                  if not isinstance(parsed, Version):
-                      raise ValueError(f"Invalid version format: {custom}")
+                  parse(custom)
                   new_version = custom
-              except Exception as e:
+              except InvalidVersion as e:
                   raise ValueError(f"Invalid custom version '{custom}': {e}")
           else:
               # Try to parse as semantic version
