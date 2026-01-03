@@ -116,9 +116,9 @@ class APIClient:
         is_https = str(self.base_url).startswith('https://')
         
         try:
-            # Try to get /info endpoint directly (without mapping)
+            # Try to get /info endpoint directly (without mapping, without API key)
             logger.debug("Attempting to fetch /info endpoint...")
-            response = self.session.get("/info")
+            response = self.session.request("GET", "/info", ensure_apikey=False)
             response.raise_for_status()
             info_response = response.json()
             
@@ -132,7 +132,7 @@ class APIClient:
                 # HTTP + /info exists - need to check version
                 logger.debug("Got /info on HTTP, checking version...")
                 try:
-                    api_response = self.session.get("/api")
+                    api_response = self.session.request("GET", "/api", ensure_apikey=False)
                     api_response.raise_for_status()
                     api_info = api_response.json()
                     
