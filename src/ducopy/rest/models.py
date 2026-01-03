@@ -132,7 +132,9 @@ class NodeGeneralInfo(BaseModel):
     Addr: int = Field(...)
 
     @unified_validator()
-    def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def validate_addr(
+        cls, values: dict[str, dict | str | int]
+    ) -> dict[str, dict | str | int]:
         values["Addr"] = extract_val(values.get("Addr", {}))
         return values
 
@@ -141,7 +143,9 @@ class NetworkDucoInfo(BaseModel):
     CommErrorCtr: int = Field(...)
 
     @unified_validator()
-    def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def validate_comm_error_ctr(
+        cls, values: dict[str, dict | str | int]
+    ) -> dict[str, dict | str | int]:
         values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
         return values
 
@@ -155,8 +159,17 @@ class VentilationInfo(BaseModel):
     FlowLvlTgt: int | None = None
 
     @unified_validator()
-    def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "State"]
+    def validate_ventilation_fields(
+        cls, values: dict[str, dict | str | int]
+    ) -> dict[str, dict | str | int]:
+        fields_to_extract = [
+            "FlowLvlOvrl",
+            "TimeStateRemain",
+            "TimeStateEnd",
+            "Mode",
+            "FlowLvlTgt",
+            "State",
+        ]
 
         # Define keyword mappings for transformations
         time_fields = [field for field in values if "time" in field.lower()]
@@ -252,7 +265,9 @@ class ActionInfo(BaseModel):
     Enum: list[str] | None  # Keep Enum optional
 
     @unified_validator()
-    def set_optional_enum(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def set_optional_enum(
+        cls, values: dict[str, dict | str | int]
+    ) -> dict[str, dict | str | int]:
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":
             values["Enum"] = None  # Ensure Enum is set to None if not required
