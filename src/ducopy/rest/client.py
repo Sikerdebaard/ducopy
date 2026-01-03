@@ -686,8 +686,60 @@ class APIClient:
                     logger.warning("Failed to fetch info for node {}: {}", node_id, e)
                     # Continue with other nodes even if one fails
             data = {"Nodes": nodes}
+        elif self._generation == "modern" and "Nodes" in data:
+            # Transform each node in the Connectivity Board response
+            transformed_nodes = []
+            for node in data["Nodes"]:
+                transformed_node = self._transform_modern_node_info(node)
+                transformed_nodes.append(transformed_node)
+            data["Nodes"] = transformed_nodes
         
         return NodesInfoResponse(**data)
+
+    def _transform_modern_node_info(self, data: dict) -> dict:
+        """
+        Transform Connectivity Board node info response to move network fields to NetworkDuco.
+        
+        The Connectivity Board returns SubType, NetworkType, Parent, Asso in General section,
+        but they should be in NetworkDuco section for consistency.
+        """
+        # Map modern API field names to model field names
+        # Modern API uses: SubType, NetworkType, Parent, Asso
+        # Model uses: Subtype, (no NetworkType stored separately), Prnt, Asso
+        network_field_mapping = {
+            "SubType": "Subtype",
+            "Parent": "Prnt",
+            "Asso": "Asso",
+            # NetworkType is informational but not stored in the model currently
+        }
+        
+        if "General" in data:
+            # Extract network fields from General
+            network_data = {}
+            for api_field, model_field in network_field_mapping.items():
+                if api_field in data["General"]:
+                    field_data = data["General"].pop(api_field)
+                    # Extract the Val if it's a dict with Val key, otherwise use as-is
+                    if isinstance(field_data, dict) and "Val" in field_data:
+                        network_data[model_field] = field_data["Val"]
+                    else:
+                        network_data[model_field] = field_data
+            
+            # NetworkType is informational - can be logged but not stored in model
+            if "NetworkType" in data["General"]:
+                network_type = data["General"].pop("NetworkType")
+                logger.debug("NetworkType: {}", network_type.get("Val") if isinstance(network_type, dict) else network_type)
+            
+            # Only create NetworkDuco section if we have network data
+            if network_data:
+                # Create or update NetworkDuco section
+                if "NetworkDuco" not in data or data["NetworkDuco"] is None:
+                    data["NetworkDuco"] = {}
+                
+                # Add network fields to NetworkDuco
+                data["NetworkDuco"].update(network_data)
+        
+        return data
 
     def get_node_info(self, node_id: int) -> NodeInfo:
         """Retrieve detailed information for a specific node."""
@@ -706,9 +758,12 @@ class APIClient:
         
         data = response.json()
         
-        # Transform Communication and Print Board response to Connectivity Board format
+        # Transform responses to ensure consistent structure
         if self._generation == "legacy":
             data = self._transform_gen1_node_info(data)
+        else:
+            # Also transform modern API to move network fields to NetworkDuco
+            data = self._transform_modern_node_info(data)
         
         return NodeInfo(**data)  # Direct instantiation for Pydantic 1.x
 
