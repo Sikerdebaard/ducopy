@@ -52,7 +52,7 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
     A unified validator decorator for Pydantic 1.x and 2.x.
     Ensures that user-defined validators run before field-level validation,
     allowing data transformations to occur first (e.g. extracting `.Val`).
-    
+
     Validator methods should be defined as classmethods using @classmethod decorator.
     """
 
@@ -141,9 +141,7 @@ class NodeGeneralInfo(BaseModel):
 
     @unified_validator()
     @classmethod
-    def validate_addr(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["Addr"] = extract_val(values.get("Addr", {}))
         return values
 
@@ -153,9 +151,7 @@ class NetworkDucoInfo(BaseModel):
 
     @unified_validator()
     @classmethod
-    def validate_comm_error_ctr(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
         return values
 
@@ -170,9 +166,7 @@ class VentilationInfo(BaseModel):
 
     @unified_validator()
     @classmethod
-    def validate_ventilation_fields(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         fields_to_extract = [
             "FlowLvlOvrl",
             "TimeStateRemain",
@@ -278,9 +272,7 @@ class ActionInfo(BaseModel):
 
     @unified_validator()
     @classmethod
-    def set_optional_enum(
-        cls, values: dict[str, dict | str | int]
-    ) -> dict[str, dict | str | int]:
+    def set_optional_enum(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":
             values["Enum"] = None  # Ensure Enum is set to None if not required
