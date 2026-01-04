@@ -358,23 +358,14 @@ class APIClient:
                     response.raise_for_status()
                     board_data = response.json()
                     
-                    # Communication/Print board format may have MAC in different locations
-                    # Try common paths - check for {"Val": ...} format first
-                    mac_value = board_data.get("mac") or board_data.get("Mac")
-                    if isinstance(mac_value, dict) and "Val" in mac_value:
-                        self._mac_address = mac_value["Val"]
-                    elif isinstance(mac_value, str):
-                        self._mac_address = mac_value
+                    # Communication/Print board /board_info returns plain values:
+                    # {"serial": "PRSN21401066", "mac": "00:08:5f:35:a8:0f", "swversion": "16036.13.4.0", "uptime": 2452}
+                    self._mac_address = board_data.get("mac")
+                    self._board_serial = board_data.get("serial")
+                    self._board_uptime = board_data.get("uptime")
                     
-                    # Serial might also be in boardinfo endpoint
-                    serial_value = board_data.get("serial") or board_data.get("Serial")
-                    if isinstance(serial_value, dict) and "Val" in serial_value:
-                        self._board_serial = serial_value["Val"]
-                    elif isinstance(serial_value, str):
-                        self._board_serial = serial_value
-                    
-                    logger.info("Cached device info from Communication/Print Board: MAC={}, Serial={}", 
-                               self._mac_address, self._board_serial)
+                    logger.info("Cached device info from Communication/Print Board: MAC={}, Serial={}, Uptime={}", 
+                               self._mac_address, self._board_serial, self._board_uptime)
                     
                 except Exception as e:
                     logger.warning("Failed to fetch /boardinfo endpoint: {}. Device info may be incomplete.", e)
@@ -1129,6 +1120,7 @@ class APIClient:
                     "Mac": str,           # MAC address (e.g., "AA:BB:CC:DD:EE:FF")
                     "Serial": str,        # Board serial number (e.g., "BOARD123456")
                     "SwVersion": str,     # Software version (e.g., "2.0.6.0" or "16010.3.7.0")
+                    "Uptime": int,        # Board uptime in seconds (Communication/Print boards only, None for Connectivity)
                 }
                 
         Example:
@@ -1146,7 +1138,8 @@ class APIClient:
             board_info = {
                 "Mac": None,
                 "Serial": None,
-                "SwVersion": None
+                "SwVersion": None,
+                "Uptime": None
             }
             
             # Extract MAC address
@@ -1185,14 +1178,16 @@ class APIClient:
             board_info = {
                 "Mac": self._mac_address,
                 "Serial": self._board_serial,
-                "SwVersion": None
+                "SwVersion": None,
+                "Uptime": getattr(self, '_board_uptime', None)
             }
             
-            # If not cached yet, try to fetch from /boardinfo
+            # If not cached yet, try to fetch from /board_info
             if not self._device_info_cached:
                 self._cache_device_info()
                 board_info["Mac"] = self._mac_address
                 board_info["Serial"] = self._board_serial
+                board_info["Uptime"] = getattr(self, '_board_uptime', None)
             
             # Get software version from BOX node
             # Find the BOX node in the node list
