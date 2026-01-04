@@ -281,3 +281,31 @@ def test_get_info_legacy(client: APIClient, mock_requests: requests_mock.Mocker)
     assert "Network" in response
     assert response["Network"]["IpAddress"] == {"Val": "192.168.1.100"}
     assert response["Network"]["MacAddress"] == {"Val": "00:11:22:33:44:55"}
+
+
+def test_normalize_node_structure(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that the library normalizes invalid node structures from the API."""
+    mock_detection_endpoint_modern(mock_requests)
+    client._generation = "modern"
+    client._board_type = "Connectivity Board"
+    
+    # Mock a response with invalid General field (integer instead of dict)
+    # This simulates an API quirk where General is returned as an int
+    mock_data = {
+        "Node": 1,
+        "General": 12345,  # Invalid: should be a dict
+        "NetworkDuco": None,
+        "Ventilation": None,
+        "Sensor": None
+    }
+    mock_requests.get(f"{BASE_URL}/info/nodes/1", json=mock_data)
+
+    # The library should normalize this and not crash
+    response = client.get_node_info(node_id=1)
+    
+    # Verify the response was normalized
+    assert isinstance(response, NodeInfo)
+    assert response.Node == 1
+    # General should be normalized to a dict
+    assert response.General is not None
+    assert isinstance(response.General.dict(), dict)

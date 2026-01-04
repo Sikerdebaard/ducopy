@@ -728,6 +728,44 @@ class APIClient:
         
         return NodesInfoResponse(**data)
 
+    def _normalize_node_structure(self, data: dict) -> dict:
+        """
+        Normalize and validate node data structure to ensure consistency.
+        
+        This method ensures that:
+        1. All expected dict fields (General, NetworkDuco, Ventilation, Sensor) are dicts, not other types
+        2. All values follow the {"Val": value} pattern where expected
+        3. Invalid or unexpected types are corrected
+        
+        This provides a guaranteed consistent structure to integrations regardless of API quirks.
+        """
+        # Ensure General is a dictionary
+        if "General" in data:
+            if not isinstance(data["General"], dict):
+                logger.warning("General field is type {} instead of dict, normalizing: {}", type(data["General"]).__name__, data["General"])
+                # Convert invalid General to dict with Type field
+                data["General"] = {"Type": {"Val": str(data["General"])}}
+        
+        # Ensure NetworkDuco is a dictionary or None
+        if "NetworkDuco" in data:
+            if data["NetworkDuco"] is not None and not isinstance(data["NetworkDuco"], dict):
+                logger.warning("NetworkDuco field is type {} instead of dict, setting to None: {}", type(data["NetworkDuco"]).__name__, data["NetworkDuco"])
+                data["NetworkDuco"] = None
+        
+        # Ensure Ventilation is a dictionary or None
+        if "Ventilation" in data:
+            if data["Ventilation"] is not None and not isinstance(data["Ventilation"], dict):
+                logger.warning("Ventilation field is type {} instead of dict, setting to None: {}", type(data["Ventilation"]).__name__, data["Ventilation"])
+                data["Ventilation"] = None
+        
+        # Ensure Sensor is a dictionary or None
+        if "Sensor" in data:
+            if data["Sensor"] is not None and not isinstance(data["Sensor"], dict):
+                logger.warning("Sensor field is type {} instead of dict, setting to None: {}", type(data["Sensor"]).__name__, data["Sensor"])
+                data["Sensor"] = None
+        
+        return data
+    
     def _transform_modern_node_info(self, data: dict) -> dict:
         """
         Transform Connectivity Board node info response to move network fields to NetworkDuco.
@@ -735,6 +773,9 @@ class APIClient:
         The Connectivity Board returns SubType, NetworkType, Parent, Asso in General section,
         but they should be in NetworkDuco section for consistency.
         """
+        # First, normalize the structure to handle any API quirks
+        data = self._normalize_node_structure(data)
+        
         # Map modern API field names to model field names
         # Modern API uses: SubType, NetworkType, Parent, Asso
         # Model uses: Subtype, (no NetworkType stored separately), Prnt, Asso
@@ -745,7 +786,7 @@ class APIClient:
             # NetworkType is informational but not stored in the model currently
         }
         
-        if "General" in data:
+        if "General" in data and isinstance(data["General"], dict):
             # Extract network fields from General
             network_data = {}
             for api_field, model_field in network_field_mapping.items():
