@@ -1113,6 +1113,121 @@ class APIClient:
         logger.debug("Received API logs")
         return response.json()
 
+    def get_board_info(self) -> dict:
+        """
+        Get board-level information including MAC address, serial number, and software version.
+        
+        This method provides a normalized interface for retrieving board information
+        regardless of board type:
+        
+        - Connectivity Board: Queries /info endpoint (General.Board section)
+        - Communication/Print Board: Queries /boardinfo for MAC/serial and finds BOX node for software version
+        
+        Returns:
+            dict: Board information with the following structure:
+                {
+                    "Mac": str,           # MAC address (e.g., "AA:BB:CC:DD:EE:FF")
+                    "Serial": str,        # Board serial number (e.g., "BOARD123456")
+                    "SwVersion": str,     # Software version (e.g., "2.0.6.0" or "16010.3.7.0")
+                }
+                
+        Example:
+            >>> client = APIClient("https://192.168.1.100")
+            >>> board_info = client.get_board_info()
+            >>> print(f"MAC: {board_info['Mac']}, Serial: {board_info['Serial']}, Version: {board_info['SwVersion']}")
+        """
+        logger.info("Fetching board information")
+        
+        if self.is_modern_api:
+            # Connectivity Board: Get from /info endpoint
+            logger.debug("Fetching board info from /info endpoint (Connectivity Board)")
+            info = self.get_info()
+            
+            board_info = {
+                "Mac": None,
+                "Serial": None,
+                "SwVersion": None
+            }
+            
+            # Extract MAC address
+            if "General" in info and "Lan" in info["General"]:
+                mac_data = info["General"]["Lan"].get("Mac", {})
+                if isinstance(mac_data, dict) and "Val" in mac_data:
+                    board_info["Mac"] = mac_data["Val"]
+                elif isinstance(mac_data, str):
+                    board_info["Mac"] = mac_data
+            
+            # Extract serial number
+            if "General" in info and "Board" in info["General"]:
+                serial_data = info["General"]["Board"].get("SerialBoardBox", {})
+                if isinstance(serial_data, dict) and "Val" in serial_data:
+                    board_info["Serial"] = serial_data["Val"]
+                elif isinstance(serial_data, str):
+                    board_info["Serial"] = serial_data
+            
+            # Extract software version from Board section
+            if "General" in info and "Board" in info["General"]:
+                sw_data = info["General"]["Board"].get("SwVersion", {})
+                if isinstance(sw_data, dict) and "Val" in sw_data:
+                    board_info["SwVersion"] = sw_data["Val"]
+                elif isinstance(sw_data, str):
+                    board_info["SwVersion"] = sw_data
+            
+            logger.info("Retrieved Connectivity Board info: MAC={}, Serial={}, SwVersion={}", 
+                       board_info["Mac"], board_info["Serial"], board_info["SwVersion"])
+            
+            return board_info
+            
+        else:
+            # Communication/Print Board: Get from /boardinfo + BOX node
+            logger.debug("Fetching board info from /boardinfo and BOX node (Communication/Print Board)")
+            
+            board_info = {
+                "Mac": self._mac_address,
+                "Serial": self._board_serial,
+                "SwVersion": None
+            }
+            
+            # If not cached yet, try to fetch from /boardinfo
+            if not self._device_info_cached:
+                self._cache_device_info()
+                board_info["Mac"] = self._mac_address
+                board_info["Serial"] = self._board_serial
+            
+            # Get software version from BOX node
+            # Find the BOX node in the node list
+            try:
+                nodes = self.get_nodes()
+                box_node = None
+                
+                # Look for a node with Type == "BOX"
+                if nodes.Nodes:
+                    for node in nodes.Nodes:
+                        if node.General and node.General.Type and node.General.Type.Val == "BOX":
+                            box_node = node
+                            break
+                
+                if box_node and box_node.General.SwVersion:
+                    if isinstance(box_node.General.SwVersion, dict) and "Val" in box_node.General.SwVersion:
+                        board_info["SwVersion"] = box_node.General.SwVersion["Val"]
+                    elif hasattr(box_node.General.SwVersion, "Val"):
+                        board_info["SwVersion"] = box_node.General.SwVersion.Val
+                    else:
+                        board_info["SwVersion"] = str(box_node.General.SwVersion)
+                    
+                    logger.debug("Found BOX node (ID: {}) with SwVersion: {}", 
+                               box_node.Node, board_info["SwVersion"])
+                else:
+                    logger.warning("BOX node not found or does not have SwVersion field")
+                    
+            except Exception as e:
+                logger.warning("Failed to retrieve BOX node software version: {}", e)
+            
+            logger.info("Retrieved Communication/Print Board info: MAC={}, Serial={}, SwVersion={}", 
+                       board_info["Mac"], board_info["Serial"], board_info["SwVersion"])
+            
+            return board_info
+
     def close(self) -> None:
         """Close the HTTP session."""
         logger.info("Closing the API client session")
