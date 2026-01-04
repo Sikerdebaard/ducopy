@@ -354,7 +354,7 @@ class APIClient:
                 
                 # Try /boardinfo endpoint for MAC and serial
                 try:
-                    response = self.session.request("GET", "/boardinfo", ensure_apikey=False)
+                    response = self.session.request("GET", "/board_info", ensure_apikey=False)
                     response.raise_for_status()
                     board_data = response.json()
                     
@@ -481,7 +481,7 @@ class APIClient:
         
         # Also check for any other potential sensor fields by looking for numeric values
         # that aren't already captured in other sections
-        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr", "sw", "swver", "swversion", "serial", "serialboard", "serialnode"}
+        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr", "sw", "swver", "swversion", "serial", "serialboard", "serialnode", "serialnb"}
         known_non_sensor_keys.update(network_fields.keys())  # Exclude network fields
         for key, value in gen1_data.items():
             if key not in known_non_sensor_keys and isinstance(value, (int, float)):
@@ -501,7 +501,7 @@ class APIClient:
         
         # Extract serial number (try multiple common field names)
         serial_board = None
-        for serial_key in ["serial", "serialboard", "serialnode"]:
+        for serial_key in ["serial", "serialboard", "serialnode", "serialnb"]:
             if serial_key in gen1_data and gen1_data[serial_key]:
                 serial_board = gen1_data[serial_key]
                 break
