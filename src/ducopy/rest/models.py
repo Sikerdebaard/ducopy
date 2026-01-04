@@ -159,6 +159,8 @@ class GeneralInfo(BaseModel):
 class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
     Addr: int | None = None
+    SwVersion: GeneralInfo | None = None
+    SerialBoard: str | None = None
 
     @unified_validator()
     def normalize_type_format(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -174,6 +176,19 @@ class NodeGeneralInfo(BaseModel):
         return values
 
     @unified_validator()
+    def normalize_swversion_format(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle SwVersion field which can be:
+        - Communication/Print board: {"Val": "1.0.0"} (missing Id)
+        - Connectivity board: {"Id": 65544, "Val": "1.0.0"}
+        """
+        if "SwVersion" in values and isinstance(values["SwVersion"], dict):
+            # Ensure it has both Id and Val fields
+            if "Val" in values["SwVersion"] and "Id" not in values["SwVersion"]:
+                values["SwVersion"]["Id"] = None
+        return values
+
+    @unified_validator()
     def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         addr_value = values.get("Addr", {})
         # Handle empty dict from connectivity boards
@@ -181,6 +196,18 @@ class NodeGeneralInfo(BaseModel):
             values["Addr"] = None
         else:
             values["Addr"] = extract_val(addr_value)
+        return values
+    
+    @unified_validator()
+    def normalize_serial_board(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle SerialBoard field which can be:
+        - Communication/Print board: plain string
+        - Config endpoint: plain string  
+        """
+        if "SerialBoard" in values:
+            # Extract value if it's wrapped in a dict
+            values["SerialBoard"] = extract_val(values["SerialBoard"])
         return values
 
 

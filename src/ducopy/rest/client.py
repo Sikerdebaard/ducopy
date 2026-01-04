@@ -481,7 +481,7 @@ class APIClient:
         
         # Also check for any other potential sensor fields by looking for numeric values
         # that aren't already captured in other sections
-        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr"}
+        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr", "sw", "swver", "swversion", "serial", "serialboard", "serialnode"}
         known_non_sensor_keys.update(network_fields.keys())  # Exclude network fields
         for key, value in gen1_data.items():
             if key not in known_non_sensor_keys and isinstance(value, (int, float)):
@@ -492,15 +492,40 @@ class APIClient:
         # Remove zero values from sensor data (check the Val inside the dict)
         sensor_fields = {k: v for k, v in sensor_fields.items() if v.get("Val") != 0 and v.get("Val") != 0.0}
         
+        # Extract software version (try multiple common field names)
+        sw_version = None
+        for sw_key in ["sw", "swver", "swversion"]:
+            if sw_key in gen1_data and gen1_data[sw_key]:
+                sw_version = {"Id": None, "Val": gen1_data[sw_key]}
+                break
+        
+        # Extract serial number (try multiple common field names)
+        serial_board = None
+        for serial_key in ["serial", "serialboard", "serialnode"]:
+            if serial_key in gen1_data and gen1_data[serial_key]:
+                serial_board = gen1_data[serial_key]
+                break
+        
+        # Build General section
+        general_info = {
+            "Type": {
+                "Id": None,
+                "Val": gen1_data.get("devtype", "UNKN")
+            },
+            "Addr": {"Val": gen1_data.get("addr", 0)} if gen1_data.get("addr") is not None else None
+        }
+        
+        # Add SwVersion if available
+        if sw_version:
+            general_info["SwVersion"] = sw_version
+        
+        # Add SerialBoard if available
+        if serial_board:
+            general_info["SerialBoard"] = serial_board
+        
         return {
             "Node": gen1_data.get("node"),
-            "General": {
-                "Type": {
-                    "Id": None,
-                    "Val": gen1_data.get("devtype", "UNKN")
-                },
-                "Addr": {"Val": gen1_data.get("addr", 0)} if gen1_data.get("addr") is not None else None
-            },
+            "General": general_info,
             "NetworkDuco": {
                 "CommErrorCtr": {"Val": gen1_data.get("cerr", 0)} if gen1_data.get("cerr") is not None else None,
                 "Subtype": {"Val": gen1_data.get("subtype")} if gen1_data.get("subtype") is not None else None,
