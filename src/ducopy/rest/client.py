@@ -79,6 +79,11 @@ class APIClient:
         self._generation = None
         self._board_type = None
         
+        # Device identification cache (board-agnostic)
+        self._mac_address = None
+        self._board_serial = None
+        self._device_info_cached = False
+        
         logger.info("APIClient initialized with base URL: {}", base_url)
         
         # Automatically detect generation if requested
@@ -173,12 +178,17 @@ class APIClient:
                     str(self.base_url).replace("http://", "").rstrip("/")
                 )
             
+            # Cache device identification info
+            self._cache_device_info()
+            
             return {
                 "generation": self._generation,
                 "api_version": self._api_version,
                 "public_api_version": self._public_api_version,
                 "protocol": "HTTPS" if is_https else "HTTP",
-                "board_type": self._board_type
+                "board_type": self._board_type,
+                "mac_address": self._mac_address,
+                "board_serial": self._board_serial
             }
             
         except Exception as e:
@@ -191,12 +201,17 @@ class APIClient:
                 self._board_type = "Communication and Print Board"
                 logger.info("Detected Communication and Print Board (legacy API) - /info endpoint not found (404)")
                 
+                # Cache device identification info
+                self._cache_device_info()
+                
                 return {
                     "generation": self._generation,
                     "api_version": None,
                     "public_api_version": None,
                     "protocol": "HTTPS" if is_https else "HTTP",
-                    "board_type": self._board_type
+                    "board_type": self._board_type,
+                    "mac_address": self._mac_address,
+                    "board_serial": self._board_serial
                 }
             
             # Check if it's a timeout or connection error with HTTPS
@@ -273,6 +288,103 @@ class APIClient:
             bool: True if Communication and Print Board, False otherwise
         """
         return self._generation == "legacy"
+
+    @property
+    def mac_address(self) -> str | None:
+        """
+        Get the cached MAC address of the device.
+        
+        This is fetched during detect_generation() and cached for consistent access
+        regardless of board type:
+        - Connectivity Board: Available in /info
+        - Communication/Print Board: Available in /boardinfo
+        
+        Returns:
+            str | None: The MAC address or None if not yet cached
+        """
+        return self._mac_address
+
+    @property
+    def board_serial(self) -> str | None:
+        """
+        Get the cached board serial number.
+        
+        This is fetched during detect_generation() and cached for consistent access
+        regardless of board type.
+        
+        Returns:
+            str | None: The board serial number or None if not yet cached
+        """
+        return self._board_serial
+
+    def _cache_device_info(self) -> None:
+        """
+        Cache device identification information (MAC address, serial number).
+        
+        This method fetches device info from the appropriate endpoint based on board type:
+        - Connectivity Board (modern): /info endpoint contains all info
+        - Communication/Print Board (legacy): MAC is in /boardinfo endpoint
+        
+        The cached info is then available via properties for consistent access.
+        """
+        if self._device_info_cached:
+            logger.debug("Device info already cached")
+            return
+        
+        try:
+            if self.is_modern_api:
+                # Connectivity Board: /info has everything
+                logger.debug("Fetching device info from /info endpoint (Connectivity Board)")
+                response = self.session.request("GET", "/info", ensure_apikey=False)
+                response.raise_for_status()
+                data = response.json()
+                
+                # Extract MAC and serial from nested structure
+                if "General" in data and "Lan" in data["General"]:
+                    self._mac_address = data["General"]["Lan"].get("Mac", {}).get("Val")
+                if "General" in data and "Board" in data["General"]:
+                    self._board_serial = data["General"]["Board"].get("SerialBoardBox", {}).get("Val")
+                
+                logger.info("Cached device info from Connectivity Board: MAC={}, Serial={}", 
+                           self._mac_address, self._board_serial)
+                
+            elif self.is_legacy_api:
+                # Communication/Print Board: Need /boardinfo for MAC
+                logger.debug("Fetching device info from /boardinfo endpoint (Communication/Print Board)")
+                
+                # Try /boardinfo endpoint for MAC and serial
+                try:
+                    response = self.session.request("GET", "/boardinfo", ensure_apikey=False)
+                    response.raise_for_status()
+                    board_data = response.json()
+                    
+                    # Communication/Print board format may have MAC in different locations
+                    # Try common paths - check for {"Val": ...} format first
+                    mac_value = board_data.get("mac") or board_data.get("Mac")
+                    if isinstance(mac_value, dict) and "Val" in mac_value:
+                        self._mac_address = mac_value["Val"]
+                    elif isinstance(mac_value, str):
+                        self._mac_address = mac_value
+                    
+                    # Serial might also be in boardinfo endpoint
+                    serial_value = board_data.get("serial") or board_data.get("Serial")
+                    if isinstance(serial_value, dict) and "Val" in serial_value:
+                        self._board_serial = serial_value["Val"]
+                    elif isinstance(serial_value, str):
+                        self._board_serial = serial_value
+                    
+                    logger.info("Cached device info from Communication/Print Board: MAC={}, Serial={}", 
+                               self._mac_address, self._board_serial)
+                    
+                except Exception as e:
+                    logger.warning("Failed to fetch /boardinfo endpoint: {}. Device info may be incomplete.", e)
+                    # Continue - partial info is acceptable
+            
+            self._device_info_cached = True
+            
+        except Exception as e:
+            logger.error("Failed to cache device info: {}", e)
+            # Don't raise - this is not critical, just nice to have
 
     def _map_endpoint(self, endpoint: str) -> str:
         """
@@ -709,7 +821,13 @@ class APIClient:
         return response.json()
 
     def get_info(self, module: str = None, submodule: str = None, parameter: str = None) -> dict:
-        """Fetch general API information."""
+        """
+        Fetch general API information.
+        
+        For Communication/Print boards, this method enriches the response with cached
+        device identification info (MAC address, serial) that is only available via
+        the /boardinfo endpoint, ensuring consistent data regardless of board type.
+        """
         params = {k: v for k, v in {"module": module, "submodule": submodule, "parameter": parameter}.items() if v}
         
         # Map endpoint for Communication and Print Board
@@ -726,6 +844,27 @@ class APIClient:
         if self._generation == "legacy":
             logger.debug("Transforming legacy info response to modern format")
             data = self._transform_gen1_info(data)
+            
+            # Enrich with cached device info (MAC, serial) for legacy boards
+            # This info is only available in /communication endpoint on legacy boards
+            if self._mac_address or self._board_serial:
+                logger.debug("Enriching legacy board response with cached device info")
+                
+                # Ensure General structure exists
+                if "General" not in data:
+                    data["General"] = {}
+                
+                # Add Lan.Mac if cached
+                if self._mac_address:
+                    if "Lan" not in data["General"]:
+                        data["General"]["Lan"] = {}
+                    data["General"]["Lan"]["Mac"] = {"Val": self._mac_address}
+                
+                # Add Board.SerialBoardBox if cached
+                if self._board_serial:
+                    if "Board" not in data["General"]:
+                        data["General"]["Board"] = {}
+                    data["General"]["Board"]["SerialBoardBox"] = {"Val": self._board_serial}
         
         return data
 
