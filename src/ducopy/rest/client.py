@@ -543,7 +543,27 @@ class APIClient:
             "Received response for POST action from Node: {} with Action: {} and Val: {}", node_id, action, value
         )
 
-        return ActionsChangeResponse(**response.json())
+        response_data = response.json()
+        action_response = ActionsChangeResponse(**response_data)
+        
+        # Validate the response indicates success
+        # Code should be 0 for success, non-zero for failure
+        # Result should contain "SUCCESS" (case-insensitive)
+        if action_response.Code is not None and action_response.Code != 0:
+            logger.error("Action failed with error code {}: {}", action_response.Code, action_response.Result)
+            raise ValueError(
+                f"Failed to perform action '{action}' on node {node_id}. "
+                f"Error code: {action_response.Code}, Result: {action_response.Result}"
+            )
+        
+        if "SUCCESS" not in action_response.Result.upper():
+            logger.error("Action failed with result: {}", action_response.Result)
+            raise ValueError(
+                f"Failed to perform action '{action}' on node {node_id}. Result: {action_response.Result}"
+            )
+        
+        logger.info("Successfully performed action '{}' on node {} with value '{}'", action, node_id, value)
+        return action_response
 
     def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
         """
@@ -636,9 +656,10 @@ class APIClient:
         
         # Communication and Print Board doesn't have a /config/nodes endpoint - fetch each node individually
         if self._generation == "legacy":
-            # First, get the node list
+            # First, get the node list - this will raise an exception if it fails
             nodes_response = self.get_nodes()
             node_configs = []
+            failed_nodes = []
             node_ids = [node.Node for node in nodes_response.Nodes] if nodes_response.Nodes else []
             logger.info("Communication and Print Board detected - fetching config for {} nodes", len(node_ids))
             
@@ -652,7 +673,22 @@ class APIClient:
                         node_configs.append(config.dict())
                 except Exception as e:
                     logger.warning("Failed to fetch config for node {}: {}", node_id, e)
-                    # Continue with other nodes even if one fails
+                    failed_nodes.append(node_id)
+                    # Continue with other nodes - individual node failures are tolerated
+            
+            # If ALL nodes failed, raise an error - this indicates a systematic problem
+            if failed_nodes and len(failed_nodes) == len(node_ids):
+                raise RuntimeError(
+                    f"Failed to fetch configuration for all {len(node_ids)} nodes. "
+                    "This may indicate a communication problem with the board."
+                )
+            
+            # If some nodes failed, log it but continue
+            if failed_nodes:
+                logger.warning(
+                    "Successfully fetched config for {} of {} nodes. Failed nodes: {}", 
+                    len(node_configs), len(node_ids), failed_nodes
+                )
             
             data = {"Nodes": node_configs}
             return NodesResponse(**data)
@@ -697,6 +733,9 @@ class APIClient:
         """Retrieve list of all nodes."""
         logger.info("Fetching list of all nodes")
         endpoint = self._map_endpoint("/info/nodes")
+        
+        # This request must succeed - don't catch exceptions here
+        # If it fails, let the exception propagate to the caller
         response = self.session.get(endpoint)
         response.raise_for_status()
         logger.debug("Received nodes data")
@@ -708,6 +747,7 @@ class APIClient:
         if self._generation == "legacy" and "nodelist" in data:
             node_ids = data["nodelist"]
             nodes = []
+            failed_nodes = []
             logger.info("Communication and Print Board detected - fetching details for {} nodes", len(node_ids))
             for node_id in node_ids:
                 try:
@@ -716,7 +756,23 @@ class APIClient:
                     nodes.append(node_info)
                 except Exception as e:
                     logger.warning("Failed to fetch info for node {}: {}", node_id, e)
-                    # Continue with other nodes even if one fails
+                    failed_nodes.append(node_id)
+                    # Continue with other nodes - individual node failures are tolerated
+            
+            # If ALL nodes failed, raise an error - this indicates a systematic problem
+            if failed_nodes and len(failed_nodes) == len(node_ids):
+                raise RuntimeError(
+                    f"Failed to fetch information for all {len(node_ids)} nodes. "
+                    "This may indicate a communication problem with the board."
+                )
+            
+            # If some nodes failed, log it but continue
+            if failed_nodes:
+                logger.warning(
+                    "Successfully fetched {} of {} nodes. Failed nodes: {}", 
+                    len(nodes), len(node_ids), failed_nodes
+                )
+            
             data = {"Nodes": nodes}
         elif self._generation == "modern" and "Nodes" in data:
             # Transform each node in the Connectivity Board response

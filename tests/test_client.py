@@ -101,6 +101,50 @@ def test_post_action_node(client: APIClient, mock_requests: requests_mock.Mocker
     assert response.Result == mock_data["Result"]
 
 
+def test_post_action_node_failure_nonzero_code(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that post_action_node raises an error when board returns non-zero error code."""
+    mock_detection_endpoint_modern(mock_requests)
+    client._generation = "modern"
+    client._board_type = "Connectivity Board"
+    
+    # Mock get_actions_node for validation
+    actions_data = load_mock_data("actions_node_1.json")
+    mock_requests.get(f"{BASE_URL}/action/nodes/1", json=actions_data)
+    
+    # Mock a failure response with non-zero code
+    failure_response = {
+        "Code": 1,  # Non-zero indicates error
+        "Result": "FAILURE: Invalid state"
+    }
+    mock_requests.post(f"{BASE_URL}/action/nodes/1", json=failure_response)
+
+    # Should raise ValueError
+    with pytest.raises(ValueError, match="Failed to perform action.*Error code: 1"):
+        client.post_action_node(action="SetVentilationState", value="AUTO", node_id=1)
+
+
+def test_post_action_node_failure_result(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that post_action_node raises an error when board returns failure result."""
+    mock_detection_endpoint_modern(mock_requests)
+    client._generation = "modern"
+    client._board_type = "Connectivity Board"
+    
+    # Mock get_actions_node for validation
+    actions_data = load_mock_data("actions_node_1.json")
+    mock_requests.get(f"{BASE_URL}/action/nodes/1", json=actions_data)
+    
+    # Mock a failure response with FAILURE in result (but Code could be None or 0)
+    failure_response = {
+        "Code": None,
+        "Result": "FAILURE"
+    }
+    mock_requests.post(f"{BASE_URL}/action/nodes/1", json=failure_response)
+
+    # Should raise ValueError
+    with pytest.raises(ValueError, match="Failed to perform action.*Result: FAILURE"):
+        client.post_action_node(action="SetVentilationState", value="AUTO", node_id=1)
+
+
 def test_get_node_info(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
     mock_detection_endpoint_modern(mock_requests)
     client._generation = "modern"
@@ -249,6 +293,63 @@ def test_get_nodes_legacy(client: APIClient, mock_requests: requests_mock.Mocker
     response = client.get_nodes()
     assert isinstance(response, NodesInfoResponse)
     assert len(response.Nodes) == 3
+
+
+def test_get_nodes_legacy_all_nodes_fail(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that get_nodes raises error when ALL nodes fail on Communication and Print Board."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Mock nodelist response
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1, 2, 3]})
+    
+    # Mock all node info requests to fail (e.g., 500 error)
+    mock_requests.get(f"{BASE_URL}/nodeinfoget", status_code=500)
+    
+    # Should raise RuntimeError because all nodes failed
+    with pytest.raises(RuntimeError, match="Failed to fetch information for all 3 nodes"):
+        client.get_nodes()
+
+
+def test_get_nodes_legacy_partial_failure(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that get_nodes continues when SOME nodes fail on Communication and Print Board."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Mock nodelist response
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1, 2, 3]})
+    
+    # Mock responses: node 1 and 3 succeed, node 2 fails
+    def node_info_callback(request, context):
+        params = request.qs
+        node_id = int(params['node'][0]) if 'node' in params else 1
+        
+        if node_id == 2:
+            context.status_code = 500
+            return "Internal Server Error"
+        
+        return {
+            "node": node_id,
+            "devtype": "VLVRH",
+            "addr": node_id,
+            "state": "AUTO",
+            "ovrl": 255,
+            "cerr": 0
+        }
+    
+    mock_requests.get(f"{BASE_URL}/nodeinfoget", json=node_info_callback)
+    
+    # Should succeed with 2 nodes (1 and 3)
+    response = client.get_nodes()
+    assert isinstance(response, NodesInfoResponse)
+    assert len(response.Nodes) == 2
+    # Verify we got nodes 1 and 3, not node 2
+    node_ids = [node.Node for node in response.Nodes]
+    assert 1 in node_ids
+    assert 3 in node_ids
+    assert 2 not in node_ids
 
 
 def test_get_info_legacy(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
