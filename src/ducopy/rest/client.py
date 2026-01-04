@@ -1023,6 +1023,30 @@ class APIClient:
                 # Add network fields to NetworkDuco
                 data["NetworkDuco"].update(network_data)
         
+        # Normalize calibration data: Move Ventilation.Calibration.* to Calibration.Calib*
+        # This ensures consistent access regardless of board type
+        if "Ventilation" in data and isinstance(data["Ventilation"], dict):
+            if "Calibration" in data["Ventilation"] and isinstance(data["Ventilation"]["Calibration"], dict):
+                calib_data = data["Ventilation"].pop("Calibration")
+                
+                # Map Connectivity Board calibration fields to normalized names
+                calib_mapping = {
+                    "Valid": "CalibIsValid",
+                    "State": "CalibState", 
+                    "Error": "CalibError"
+                }
+                
+                # Create Calibration section if it doesn't exist
+                if "Calibration" not in data or data["Calibration"] is None:
+                    data["Calibration"] = {}
+                
+                # Move and rename calibration fields
+                for api_field, normalized_field in calib_mapping.items():
+                    if api_field in calib_data:
+                        data["Calibration"][normalized_field] = calib_data[api_field]
+                
+                logger.debug("Normalized calibration data from Ventilation.Calibration to Calibration section")
+        
         return data
 
     def get_node_info(self, node_id: int) -> NodeInfo:
