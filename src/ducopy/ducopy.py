@@ -235,6 +235,28 @@ class DucoPy:
         """
         return self.client.get_logs()
 
+    def get_board_info(self) -> dict:
+        """
+        Get board-level information including MAC address, serial number, and software version.
+        
+        This method provides a normalized interface for retrieving board information
+        regardless of board type (Connectivity Board or Communication/Print Board).
+        
+        Returns:
+            dict: Board information with the following structure:
+                {
+                    "Mac": str,           # MAC address (e.g., "AA:BB:CC:DD:EE:FF")
+                    "Serial": str,        # Board serial number (e.g., "BOARD123456")
+                    "SwVersion": str,     # Software version (e.g., "2.0.6.0" or "16010.3.7.0")
+                }
+                
+        Example:
+            >>> facade = DucoPy("https://192.168.1.100")
+            >>> board_info = facade.get_board_info()
+            >>> print(f"MAC: {board_info['Mac']}, Version: {board_info['SwVersion']}")
+        """
+        return self.client.get_board_info()
+
     def close(self) -> None:
         """Close the HTTP session.
 

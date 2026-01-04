@@ -41,6 +41,8 @@ from collections.abc import Callable
 import time
 from ducopy.rest.apikeygenerator import ApiKeyGenerator
 from loguru import logger
+import urllib3
+import warnings
 
 
 # Map the URL to the expected hostname in the certificate
@@ -67,16 +69,19 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
 
 
 class DucoUrlSession(requests.Session):
-    def __init__(self, base_url: str, verify: bool | str = True) -> None:
+    def __init__(self, base_url: str, verify: bool | str = True, endpoint_mapper: callable = None, timeout: int = 10) -> None:
         """
         Initializes the BaseUrlSession with a base URL and optional SSL verification setting.
 
         Args:
             base_url (str): The base URL to prepend to relative URLs.
             verify (bool | str): Path to the certificate or a boolean indicating SSL verification.
+            endpoint_mapper (callable): Optional function to map endpoints for API generation compatibility.
+            timeout (int): Request timeout in seconds. Defaults to 10 seconds.
         """
         super().__init__()
         self.base_url = base_url
+        self.timeout = timeout
 
         if isinstance(verify, str):
             # Configure SSLContext to ignore hostname verification
@@ -90,10 +95,15 @@ class DucoUrlSession(requests.Session):
             self.mount("http://", adapter)
         else:
             self.verify = verify
+            # Suppress InsecureRequestWarning when SSL verification is intentionally disabled
+            if not verify:
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
         self.api_key: str | None = None
         self.api_key_timestamp: float = 0.0
         self.api_key_cache_duration: int = 60
+        self.endpoint_mapper: callable | None = endpoint_mapper
 
         logger.info("Initialized DucoUrlSession for base URL: {}", base_url)
 
@@ -101,20 +111,31 @@ class DucoUrlSession(requests.Session):
         """Refresh API key if expired or missing."""
         if not self.api_key or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration:
             logger.debug("API key is missing or expired. Fetching a new one.")
-            req = self.request("GET", "/info", ensure_apikey=False)
+            endpoint = self.endpoint_mapper("/info") if self.endpoint_mapper else "/info"
+            req = self.request("GET", endpoint, ensure_apikey=False)
             req.raise_for_status()
             data = req.json()
 
-            ducomac = data["General"]["Lan"]["Mac"]["Val"]
-            ducoserial = data["General"]["Board"]["SerialBoardBox"]["Val"]
-            ducotime = data["General"]["Board"]["Time"]["Val"]
+            # Check if this is a Connectivity Board (modern) API response with nested structure
+            # Connectivity Board has data["General"]["Lan"]["Mac"]["Val"]
+            # Communication and Print Board has a flatter structure and doesn't use API keys
+            if "Lan" in data.get("General", {}):
+                # Connectivity Board API - generate API key
+                ducomac = data["General"]["Lan"]["Mac"]["Val"]
+                ducoserial = data["General"]["Board"]["SerialBoardBox"]["Val"]
+                ducotime = data["General"]["Board"]["Time"]["Val"]
 
-            apigen = ApiKeyGenerator()
-            self.api_key = apigen.generate_api_key(ducoserial, ducomac, ducotime)
-            self.api_key_timestamp = time.time()
+                apigen = ApiKeyGenerator()
+                self.api_key = apigen.generate_api_key(ducoserial, ducomac, ducotime)
+                self.api_key_timestamp = time.time()
 
-            self.headers.update({"Api-Key": self.api_key})
-            logger.debug(f"Api-Key: {self.api_key}")
+                self.headers.update({"Api-Key": self.api_key})
+                logger.debug(f"Api-Key: {self.api_key}")
+            else:
+                # Communication and Print Board - doesn't use API keys
+                logger.debug("Communication and Print Board detected - API keys not required")
+                self.api_key = "legacy-no-key-required"
+                self.api_key_timestamp = time.time()
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 
     def request(
@@ -143,6 +164,7 @@ class DucoUrlSession(requests.Session):
             url = urljoin(self.base_url, url)
 
         kwargs.setdefault("verify", self.verify)
+        kwargs.setdefault("timeout", self.timeout)
 
         max_retries = 3
         for attempt in range(max_retries):

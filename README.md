@@ -1,6 +1,6 @@
 # DucoPy
 
-**DucoPy** is a Python library and CLI tool that allows for full control of a **DucoBox** ventilation unit equipped with a **DucoBox Connectivity Board**. Using DucoPy, you can retrieve information, control settings, and monitor logs of your DucoBox system directly from your Python environment or command line.
+**DucoPy** is a Python library and CLI tool that allows for full control of a **DucoBox** ventilation unit equipped with either a **DucoBox Connectivity Board** (modern API) or **Communication and Print Board** (legacy API). Using DucoPy, you can retrieve information, control settings, and monitor logs of your DucoBox system directly from your Python environment or command line.
 
 ## Features
 
@@ -67,7 +67,7 @@ Here is a list of the main methods available in the `DucoPy` facade:
 
 - `get_api_info() -> dict`: Retrieve general API information.
 - `get_info(module: str | None = None, submodule: str | None = None, parameter: str | None = None) -> dict`: Retrieve information about modules and parameters.
-- `get_nodes() -> NodesResponse`: Retrieve a list of all nodes in the DucoBox system.
+- `get_nodes() -> NodesInfoResponse`: Retrieve a list of all nodes in the DucoBox system.
 - `get_node_info(node_id: int) -> NodeInfo`: Get details about a specific node by its ID.
 - `get_config_node(node_id: int) -> ConfigNodeResponse`: Get configuration settings for a specific node.
 - `get_action(action: str | None = None) -> dict`: Retrieve information about a specific action.
@@ -95,39 +95,39 @@ This will display a list of available commands.
 1. **Retrieve API information**
 
    ```bash
-   ducopy get-api-info --base-url https://your-ducobox-ip
+   ducopy get-api-info https://your-ducobox-ip
    ```
 
 2. **Get details about nodes**
 
    ```bash
-   ducopy get-nodes --base-url https://your-ducobox-ip
+   ducopy get-nodes https://your-ducobox-ip
    ```
 
 3. **Get information for a specific node**
 
    ```bash
-   ducopy get-node-info --base-url https://your-ducobox-ip --node-id 1
+   ducopy get-node-info https://your-ducobox-ip --node-id 1
    ```
 
 4. **Get actions available for a node**
 
    ```bash
-   ducopy get-actions-node --base-url https://your-ducobox-ip --node-id 1
+   ducopy get-actions-node https://your-ducobox-ip --node-id 1
    ```
 
 5. **Retrieve system logs**
 
    ```bash
-   ducopy get-logs --base-url https://your-ducobox-ip
+   ducopy get-logs https://your-ducobox-ip
    ```
 
 ### Output Formatting
 
-All commands support an optional `--output-format` argument to specify the output format (`pretty` or `json`):
+All commands support an optional `--format` argument to specify the output format (`pretty` or `json`):
 
 ```bash
-ducopy get-nodes --base-url https://your-ducobox-ip --output-format json
+ducopy get-nodes https://your-ducobox-ip --format json
 ```
 
 - `pretty` (default): Formats the output in a structured, readable style.
@@ -138,7 +138,7 @@ ducopy get-nodes --base-url https://your-ducobox-ip --output-format json
 To set the logging level, use the `--logging-level` option, which accepts values like `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.
 
 ```bash
-ducopy --logging-level DEBUG get-nodes --base-url https://your-ducobox-ip
+ducopy --logging-level DEBUG get-nodes https://your-ducobox-ip
 ```
 
 ## Contributing

@@ -34,17 +34,25 @@
 # SOFTWARE.
 #
 # ensure pydantic 1 and 2 support since HA is in a transition phase
-try:
-    from pydantic import BaseModel, Field, root_validator
-
-    PYDANTIC_V2 = False
-except ImportError:
-    from pydantic import BaseModel, Field, model_validator
-
-    PYDANTIC_V2 = True
-
+from pydantic import BaseModel, Field
 from typing import Any, Literal
 from functools import wraps
+
+try:
+    from pydantic import VERSION
+    PYDANTIC_V2 = int(VERSION.split('.')[0]) >= 2
+except (ImportError, AttributeError):
+    # Fallback: try importing model_validator which only exists in V2
+    try:
+        from pydantic import model_validator
+        PYDANTIC_V2 = True
+    except ImportError:
+        PYDANTIC_V2 = False
+
+if PYDANTIC_V2:
+    from pydantic import model_validator
+else:
+    from pydantic import root_validator
 
 
 def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
@@ -117,6 +125,13 @@ class NodeConfig(BaseModel):
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
 
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        if "node" in values and "Node" not in values:
+            values["Node"] = values.pop("node")
+        return values
+
 
 class NodesResponse(BaseModel):
     Nodes: list[NodeConfig]
@@ -126,29 +141,114 @@ class GeneralInfo(BaseModel):
     Id: int | None = None
     Val: str
 
+    @unified_validator()
+    def normalize_val_format(cls, values: dict[str, Any] | Any) -> dict[str, Any]:
+        """
+        Handle both board formats:
+        - Communication/Print board: {"Val": "BOX"}
+        - Connectivity board: {"Id": None, "Val": "BOX"}
+        """
+        # If we receive just a dict with only "Val", normalize it
+        if isinstance(values, dict):
+            if "Val" in values and "Id" not in values:
+                # This is Communication/Print board format - already correct
+                values.setdefault("Id", None)
+        return values
+
 
 class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
-    Addr: int = Field(...)
+    Addr: int | None = None
+    SwVersion: GeneralInfo | None = None
+    SerialBoard: str | None = None
+
+    @unified_validator()
+    def normalize_type_format(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle Type field which can be:
+        - Communication/Print board: {"Val": "BOX"} (missing Id)
+        - Connectivity board: {"Id": None, "Val": "BOX"}
+        """
+        if "Type" in values and isinstance(values["Type"], dict):
+            # Ensure it has both Id and Val fields
+            if "Val" in values["Type"] and "Id" not in values["Type"]:
+                values["Type"]["Id"] = None
+        return values
+
+    @unified_validator()
+    def normalize_swversion_format(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle SwVersion field which can be:
+        - Communication/Print board: {"Val": "1.0.0"} (missing Id)
+        - Connectivity board: {"Id": 65544, "Val": "1.0.0"}
+        """
+        if "SwVersion" in values and isinstance(values["SwVersion"], dict):
+            # Ensure it has both Id and Val fields
+            if "Val" in values["SwVersion"] and "Id" not in values["SwVersion"]:
+                values["SwVersion"]["Id"] = None
+        return values
 
     @unified_validator()
     def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["Addr"] = extract_val(values.get("Addr", {}))
+        addr_value = values.get("Addr", {})
+        # Handle empty dict from connectivity boards
+        if addr_value == {}:
+            values["Addr"] = None
+        else:
+            values["Addr"] = extract_val(addr_value)
+        return values
+    
+    @unified_validator()
+    def normalize_serial_board(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle SerialBoard field which can be:
+        - Communication/Print board: plain string
+        - Config endpoint: plain string  
+        """
+        if "SerialBoard" in values:
+            # Extract value if it's wrapped in a dict
+            values["SerialBoard"] = extract_val(values["SerialBoard"])
         return values
 
 
 class NetworkDucoInfo(BaseModel):
-    CommErrorCtr: int = Field(...)
+    CommErrorCtr: int | None = None
+    # Network topology fields from Communication and Print Board
+    Subtype: int | None = None
+    Sub: int | None = None
+    Prnt: int | None = None
+    Asso: int | None = None
+    RssiN2M: int | None = None  # RSSI node to master
+    HopVia: int | None = None
+    RssiN2H: int | None = None  # RSSI node to hop
+    Show: int | None = None
+    Link: int | None = None
 
     @unified_validator()
-    def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
+    def normalize_network_fields(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize all network fields to extract Val from Communication/Print board format.
+        Fields can be raw integers or {"Val": integer}.
+        """
+        fields_to_normalize = [
+            "CommErrorCtr", "Subtype", "Sub", "Prnt", "Asso", 
+            "RssiN2M", "HopVia", "RssiN2H", "Show", "Link"
+        ]
+        
+        for field in fields_to_normalize:
+            if field in values:
+                value = values[field]
+                # Handle empty dict from connectivity boards
+                if value == {}:
+                    values[field] = None
+                else:
+                    values[field] = extract_val(value)
         return values
 
 
 class VentilationInfo(BaseModel):
     State: str | None = None
-    FlowLvlOvrl: int = Field(...)
+    FlowLvlOvrl: int | None = None
     TimeStateRemain: int | None = None
     TimeStateEnd: int | None = None
     Mode: str | None = None
@@ -192,9 +292,20 @@ class SensorData(BaseModel):
 class NodeInfo(BaseModel):
     Node: int
     General: NodeGeneralInfo
-    NetworkDuco: NetworkDucoInfo | None
-    Ventilation: VentilationInfo | None
+    NetworkDuco: NetworkDucoInfo | None = None
+    Ventilation: VentilationInfo | None = None
     Sensor: SensorData | None = Field(default=None)
+
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize Node field which can be:
+        - Communication/Print board: {"Val": 1}
+        - Connectivity board: 1
+        """
+        if "Node" in values:
+            values["Node"] = extract_val(values["Node"])
+        return values
 
 
 class NodesInfoResponse(BaseModel):
@@ -221,6 +332,13 @@ class ConfigNodeResponse(BaseModel):
     SwitchMode: ParameterConfig | None = None
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
+
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        if "node" in values and "Node" not in values:
+            values["Node"] = values.pop("node")
+        return values
 
 
 class ConfigNodeRequest(BaseModel):
@@ -265,5 +383,6 @@ class ActionsResponse(BaseModel):
 
 
 class ActionsChangeResponse(BaseModel):
-    Code: int
+    Code: int | None = None
     Result: str
+    Action: str | None = None

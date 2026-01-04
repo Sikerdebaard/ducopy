@@ -57,6 +57,9 @@ ducopy = "ducopy.cli:entry_point"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:Unverified HTTPS request:urllib3.exceptions.InsecureRequestWarning"
+]
 
 [tool.ruff]
 line-length = 120
