@@ -79,7 +79,11 @@ class APIClient:
         Returns:
             dict: JSON response from the server.
         """
-        logger.info("Performing raw GET request to endpoint: {} with params: {}", endpoint, params)
+        logger.info(
+            "Performing raw GET request to endpoint: {} with params: {}",
+            endpoint,
+            params,
+        )
         response = self.session.get(endpoint, params=params)
         response.raise_for_status()
         logger.debug("Received response for raw GET request to endpoint: {}", endpoint)
@@ -97,7 +101,9 @@ class APIClient:
         Returns:
             dict: JSON response from the server.
         """
-        logger.info(f"Performing raw POST request to endpoint: {endpoint} with data: {data}")
+        logger.info(
+            f"Performing raw POST request to endpoint: {endpoint} with data: {data}"
+        )
         response = self.session.post(endpoint, json=data)
         response.raise_for_status()
         logger.debug("Received response for raw POST request to endpoint: {}", endpoint)
@@ -115,13 +121,17 @@ class APIClient:
         Returns:
             dict: JSON response from the server.
         """
-        logger.info(f"Performing raw PATCH request to endpoint: {endpoint} with data: {data}")
+        logger.info(
+            f"Performing raw PATCH request to endpoint: {endpoint} with data: {data}"
+        )
         response = self.session.patch(endpoint, data=data)
         response.raise_for_status()
         logger.debug(f"Received response for raw PATCH request to endpoint: {endpoint}")
         return response.json()
 
-    def post_action_node(self, action: str, value: str, node_id: int) -> ActionsChangeResponse:
+    def post_action_node(
+        self, action: str, value: str, node_id: int
+    ) -> ActionsChangeResponse:
         """
         Perform a POST action by sending a JSON body to the endpoint.
 
@@ -138,7 +148,9 @@ class APIClient:
         available_actions = self.get_actions_node(node_id=node_id)
 
         # Validate the action
-        matching_action = next((a for a in available_actions.Actions if a.Action == action), None)
+        matching_action = next(
+            (a for a in available_actions.Actions if a.Action == action), None
+        )
         if not matching_action:
             raise ValueError(
                 f"Invalid action '{action}' for node {node_id}. Available actions: {[a.Action for a in available_actions.Actions]}"
@@ -152,12 +164,16 @@ class APIClient:
                 )
         elif matching_action.ValType == "Boolean":
             if value not in ["true", "false", "True", "False"]:
-                raise ValueError(f"Invalid value '{value}' for action '{action}'. Allowed values: ['true', 'false']")
+                raise ValueError(
+                    f"Invalid value '{value}' for action '{action}'. Allowed values: ['true', 'false']"
+                )
         elif matching_action.ValType == "Integer":
             try:
                 int(value)
             except ValueError:
-                raise ValueError(f"Invalid value '{value}' for action '{action}'. Expected an integer.")
+                raise ValueError(
+                    f"Invalid value '{value}' for action '{action}'. Expected an integer."
+                )
 
         endpoint = f"/action/nodes/{node_id}"
         logger.info("Performing POST action with Action: {} and Val: {}", action, value)
@@ -168,12 +184,17 @@ class APIClient:
         response = self.session.post(endpoint, data=serialized_body)
         response.raise_for_status()
         logger.debug(
-            "Received response for POST action from Node: {} with Action: {} and Val: {}", node_id, action, value
+            "Received response for POST action from Node: {} with Action: {} and Val: {}",
+            node_id,
+            action,
+            value,
         )
 
         return ActionsChangeResponse(**response.json())
 
-    def patch_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
+    def patch_config_node(
+        self, node_id: int, config: ConfigNodeRequest
+    ) -> ConfigNodeResponse:
         """
         Update configuration settings for a specific node after validating the new values.
 
@@ -210,7 +231,9 @@ class APIClient:
 
             # Check if new_value is within Min and Max
             if min_val is not None and new_value < min_val:
-                error_message = f"Value {new_value} for '{field}' is less than minimum {min_val}."
+                error_message = (
+                    f"Value {new_value} for '{field}' is less than minimum {min_val}."
+                )
                 logger.error(error_message)
                 validation_errors.append(error_message)
             if max_val is not None and new_value > max_val:
@@ -222,9 +245,7 @@ class APIClient:
             if inc is not None:
                 base_value = min_val if min_val is not None else 0
                 if (new_value - base_value) % inc != 0:
-                    error_message = (
-                        f"Value {new_value} for '{field}' is not a valid increment of {inc} starting from {base_value}."
-                    )
+                    error_message = f"Value {new_value} for '{field}' is not a valid increment of {inc} starting from {base_value}."
                     logger.error(error_message)
                     validation_errors.append(error_message)
 
@@ -258,7 +279,9 @@ class APIClient:
         response = self.session.get(endpoint)
         response.raise_for_status()
         logger.debug("Received configuration data for all nodes")
-        return NodesResponse(**response.json())  # Parse response into NodesResponse model
+        return NodesResponse(
+            **response.json()
+        )  # Parse response into NodesResponse model
 
     def get_api_info(self) -> dict:
         """Fetch API version and available endpoints."""
@@ -268,9 +291,19 @@ class APIClient:
         logger.debug("Received API information")
         return response.json()
 
-    def get_info(self, module: str = None, submodule: str = None, parameter: str = None) -> dict:
+    def get_info(
+        self, module: str = None, submodule: str = None, parameter: str = None
+    ) -> dict:
         """Fetch general API information."""
-        params = {k: v for k, v in {"module": module, "submodule": submodule, "parameter": parameter}.items() if v}
+        params = {
+            k: v
+            for k, v in {
+                "module": module,
+                "submodule": submodule,
+                "parameter": parameter,
+            }.items()
+            if v
+        }
         logger.info("Fetching info with parameters: {}", params)
         response = self.session.get("/info", params=params)
         response.raise_for_status()
@@ -299,7 +332,9 @@ class APIClient:
         response = self.session.get(f"/config/nodes/{node_id}")
         response.raise_for_status()
         logger.debug("Received config for node ID: {}", node_id)
-        return ConfigNodeResponse(**response.json())  # Direct instantiation for Pydantic 1.x
+        return ConfigNodeResponse(
+            **response.json()
+        )  # Direct instantiation for Pydantic 1.x
 
     def get_action(self, action: str = None) -> dict:
         """Retrieve action data."""
@@ -312,12 +347,16 @@ class APIClient:
 
     def get_actions_node(self, node_id: int, action: str = None) -> ActionsResponse:
         """Retrieve available actions for a specific node."""
-        logger.info("Fetching actions for node ID: {} with action filter: {}", node_id, action)
+        logger.info(
+            "Fetching actions for node ID: {} with action filter: {}", node_id, action
+        )
         params = {"action": action} if action else {}
         response = self.session.get(f"/action/nodes/{node_id}", params=params)
         response.raise_for_status()
         logger.debug("Received actions for node ID: {}", node_id)
-        return ActionsResponse(**response.json())  # Direct instantiation for Pydantic 1.x
+        return ActionsResponse(
+            **response.json()
+        )  # Direct instantiation for Pydantic 1.x
 
     def get_logs(self) -> dict:
         """Retrieve API logs."""

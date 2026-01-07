@@ -72,7 +72,9 @@ class ApiKeyGenerator:
         Returns:
             str: The generated API key as a 64-character string.
         """
-        key_template = list("n4W2lNnb2IPnfBrXwSTzTlvmDvsbemYRvXBRWrfNtQJlMiQ8yPVRmGcoPd7szSu2")
+        key_template = list(
+            "n4W2lNnb2IPnfBrXwSTzTlvmDvsbemYRvXBRWrfNtQJlMiQ8yPVRmGcoPd7szSu2"
+        )
 
         # Transforming key with mac_address
         for i in range(min(len(mac_address), 32)):
@@ -80,16 +82,26 @@ class ApiKeyGenerator:
 
         # Transforming key with board_serial
         for i in range(min(len(board_serial), 32)):
-            key_template[i + 32] = self.transform_char(key_template[i + 32], board_serial[i])
+            key_template[i + 32] = self.transform_char(
+                key_template[i + 32], board_serial[i]
+            )
 
         # Adjust key based on time
         adjusted_time = time // 86400
         for i in range(16):
             if (adjusted_time & (1 << i)) != 0:
                 idx = i * 4
-                key_template[idx] = self.transform_char(key_template[idx], key_template[i * 2 + 32])
-                key_template[idx + 1] = self.transform_char(key_template[idx + 1], key_template[63 - (i * 2)])
-                key_template[idx + 2] = self.transform_char(key_template[idx], key_template[idx + 1])
-                key_template[idx + 3] = self.transform_char(key_template[idx + 1], key_template[idx + 2])
+                key_template[idx] = self.transform_char(
+                    key_template[idx], key_template[i * 2 + 32]
+                )
+                key_template[idx + 1] = self.transform_char(
+                    key_template[idx + 1], key_template[63 - (i * 2)]
+                )
+                key_template[idx + 2] = self.transform_char(
+                    key_template[idx], key_template[idx + 1]
+                )
+                key_template[idx + 3] = self.transform_char(
+                    key_template[idx + 1], key_template[idx + 2]
+                )
 
         return "".join(key_template)

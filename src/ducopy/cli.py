@@ -52,7 +52,9 @@ app = typer.Typer(no_args_is_help=True)  # Show help if no command is provided
 def setup_logging(level: str) -> None:
     """Configure loguru with the specified log level."""
     logger.remove()  # Remove any default handlers
-    logger.add(sink=sys.stderr, level=level.upper())  # Add a new handler with the specified level
+    logger.add(
+        sink=sys.stderr, level=level.upper()
+    )  # Add a new handler with the specified level
 
 
 class URLModel(BaseModel):
@@ -84,7 +86,11 @@ def print_output(data: Any, format: str) -> None:  # noqa: ANN401
 @app.callback()
 def configure(
     logging_level: Annotated[
-        str, typer.Option(help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)", case_sensitive=False)
+        str,
+        typer.Option(
+            help="Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+            case_sensitive=False,
+        ),
     ] = "INFO",
 ) -> None:
     """CLI client for interacting with DucoPy."""
@@ -94,8 +100,12 @@ def configure(
 @app.command()
 def raw_get(
     url: str,
-    params: Annotated[str, typer.Option(help="Query parameters as a JSON string", default="{}")] = "{}",
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    params: Annotated[
+        str, typer.Option(help="Query parameters as a JSON string", default="{}")
+    ] = "{}",
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """
     Perform a raw GET request to a specified URL.
@@ -107,9 +117,7 @@ def raw_get(
     """
     url = validate_url(url)
     parsed_url = urlparse(url)
-    base_url = (
-        f"{parsed_url.scheme}://{parsed_url.netloc}"  # Extract scheme and netloc (e.g., "https://api.example.com")
-    )
+    base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"  # Extract scheme and netloc (e.g., "https://api.example.com")
     endpoint = parsed_url.path  # Extract the path (e.g., "/api/resource")
 
     try:
@@ -132,8 +140,12 @@ def raw_get(
 @app.command()
 def raw_post(
     url: str,
-    data: Annotated[str, typer.Option(help="Request body data as a JSON string")] = "{}",
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    data: Annotated[
+        str, typer.Option(help="Request body data as a JSON string")
+    ] = "{}",
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """
     Perform a raw POST request to a specified URL.
@@ -169,8 +181,12 @@ def raw_post(
 @app.command()
 def raw_patch(
     url: str,
-    data: Annotated[str, typer.Option(help="Request body data as a JSON string")] = "{}",
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    data: Annotated[
+        str, typer.Option(help="Request body data as a JSON string")
+    ] = "{}",
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """
     Perform a raw PATCH request to a specified URL.
@@ -207,9 +223,15 @@ def raw_patch(
 def change_action_node(
     base_url: str,
     node_id: int,
-    action: Annotated[str, typer.Option(help="The action key to include in the JSON body")],
-    value: Annotated[str, typer.Option(help="The value key to include in the JSON body")],
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    action: Annotated[
+        str, typer.Option(help="The action key to include in the JSON body")
+    ],
+    value: Annotated[
+        str, typer.Option(help="The value key to include in the JSON body")
+    ],
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """
     Perform a POST action by sending a JSON body to the endpoint.
@@ -224,7 +246,9 @@ def change_action_node(
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
     try:
-        response = facade.change_action_node(action=action, value=value, node_id=node_id)
+        response = facade.change_action_node(
+            action=action, value=value, node_id=node_id
+        )
         print_output(response, format)
     except Exception as e:
         logger.error("Error performing POST action for node {}: {}", node_id, e)
@@ -236,8 +260,12 @@ def change_action_node(
 def update_config_node(
     base_url: str,
     node_id: int,
-    config_json: Annotated[str, typer.Option(help="Configuration parameters as a JSON string")],
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    config_json: Annotated[
+        str, typer.Option(help="Configuration parameters as a JSON string")
+    ],
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """
     Update configuration settings for a specific node.
@@ -268,7 +296,10 @@ def update_config_node(
 
 @app.command()
 def get_config_nodes(
-    base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """
     Retrieve configuration settings for all nodes.
@@ -290,7 +321,10 @@ def get_config_nodes(
 
 @app.command()
 def get_api_info(
-    base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve API information."""
     base_url = validate_url(base_url)
@@ -304,17 +338,24 @@ def get_info(
     module: str = None,
     submodule: str = None,
     parameter: str = None,
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve general API information with optional filters."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_info(module=module, submodule=submodule, parameter=parameter), format)
+    print_output(
+        facade.get_info(module=module, submodule=submodule, parameter=parameter), format
+    )
 
 
 @app.command()
 def get_nodes(
-    base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve list of all nodes."""
     base_url = validate_url(base_url)
@@ -324,7 +365,11 @@ def get_nodes(
 
 @app.command()
 def get_node_info(
-    base_url: str, node_id: int, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    node_id: int,
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve information for a specific node by ID."""
     base_url = validate_url(base_url)
@@ -334,7 +379,11 @@ def get_node_info(
 
 @app.command()
 def get_config_node(
-    base_url: str, node_id: int, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    node_id: int,
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve configuration settings for a specific node."""
     base_url = validate_url(base_url)
@@ -346,7 +395,9 @@ def get_config_node(
 def get_action(
     base_url: str,
     action: str = None,
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve action data with an optional filter."""
     base_url = validate_url(base_url)
@@ -359,7 +410,9 @@ def get_actions_node(
     base_url: str,
     node_id: int,
     action: str = None,
-    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve actions available for a specific node."""
     base_url = validate_url(base_url)
@@ -369,7 +422,10 @@ def get_actions_node(
 
 @app.command()
 def get_logs(
-    base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    format: Annotated[
+        str, typer.Option(help="Output format: pretty or json")
+    ] = "pretty",
 ) -> None:
     """Retrieve API logs."""
     base_url = validate_url(base_url)
