@@ -193,7 +193,7 @@ class NodeInfo(BaseModel):
     Node: int
     General: NodeGeneralInfo
     NetworkDuco: NetworkDucoInfo | None
-    Ventilation: VentilationInfo | None
+    Ventilation: VentilationInfo = None
     Sensor: SensorData | None = Field(default=None)
 
 
