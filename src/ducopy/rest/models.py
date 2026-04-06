@@ -130,10 +130,12 @@ class GeneralInfo(BaseModel):
 class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
     Addr: int = Field(...)
-
+    Name: str = ""
+    
     @unified_validator()
-    def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def validate_addr_and_name(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
         values["Addr"] = extract_val(values.get("Addr", {}))
+        values["Name"] = extract_val(values.get("Name", {}))
         return values
 
 
