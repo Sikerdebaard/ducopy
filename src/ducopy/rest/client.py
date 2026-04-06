@@ -260,6 +260,113 @@ class APIClient:
         logger.debug("Received configuration data for all nodes")
         return NodesResponse(**response.json())  # Parse response into NodesResponse model
 
+    def get_config(self):
+        """
+        Retrieve configuration settings for the box device.
+
+        Returns:
+            NodesResponse: Parsed response containing configuration data for all nodes.
+        """
+        endpoint = "/config"
+        logger.info("Fetching configuration for all the box device: {}", endpoint)
+        response = self.session.get(endpoint)
+        response.raise_for_status()
+        logger.debug("Received configuration data for all nodes")
+        return response.json()
+
+    def validate_config(self, errors, template, request, path):
+        for field, new_value in request.items():
+            new_path = f"{path}->{field}"
+            old_value = template.get(field)
+            # check whether the new field exists in the old configuration
+            if old_value is None:
+                error_message = f"Parameter '{new_path}' not available for box."
+                logger.error(error_message)
+                errors.append(error_message)
+                continue
+            # the new field exists in the old configuration
+            if type(new_value) is dict:
+                # recurse
+                self.validate_config(errors, old_value, new_value, new_path)
+            else:
+                # it is a leaf node
+                val = old_value.get("Val")
+                if val is None:
+                    error_message = f"Parameter '{new_path}' not settable for box."
+                    logger.error(error_message)
+                    errors.append(error_message)
+                    continue
+                    
+                # an actual value to be set
+                min_val = old_value.get("Min")
+                max_val = old_value.get("Max")
+                inc = old_value.get("Inc")
+                options = old_value.get("Options")
+
+                # Check if new_value is within Min and Max
+                if min_val is not None and new_value < min_val:
+                    error_message = f"Value {new_value} for '{new_path}' is less than minimum {min_val}."
+                    logger.error(error_message)
+                    errors.append(error_message)
+                if max_val is not None and new_value > max_val:
+                    error_message = f"Value {new_value} for '{new_path}' is greater than maximum {max_val}."
+                    logger.error(error_message)
+                    errors.append(error_message)
+
+                # Check if new_value aligns with increment
+                if inc is not None:
+                    base_value = min_val if min_val is not None else 0
+                    if (new_value - base_value) % inc != 0:
+                        error_message = (
+                            f"Value {new_value} for '{new_path}' is not a valid increment of {inc} starting from {base_value}."
+                        )
+                        logger.error(error_message)
+                        errors.append(error_message)
+
+                # Check if listed in the valid options
+                if options is not None:
+                    if new_value not in options:
+                        error_message = f"Value {new_value} for '{new_path}' is not in {options}."
+                        logger.error(error_message)
+                        errors.append(error_message)
+
+                # we are good to go!
+                request[field] = {"Val": new_value}
+
+    def patch_config(self, config):
+        """
+        Update configuration settings for the box as a whole after validating the new values.
+
+        Args:
+            config (Config): The configuration data to update.
+
+        Returns:
+            Config: The updated configuration response from the server.
+        """
+        logger.info("Updating configuration for box as a whole")
+
+        # Fetch current configuration of the node
+        current_config = self.get_config()
+
+        # Validation logic (same as before)
+        validation_errors = []
+        self.validate_config(validation_errors, current_config, config, "")
+        
+        if validation_errors:
+            # Raise an exception with all validation errors
+            raise ValueError("Validation errors:\n" + "\n".join(validation_errors))
+
+        # Send PATCH request if validation passes
+        endpoint = f"/config"
+        logger.info("Sending PATCH request with body: {}", config)
+        response = self.session.patch(endpoint, data=json.dumps(config, separators=(',', ':')))
+
+        #response = self.session.patch(endpoint, json=request_body)
+        response.raise_for_status()
+        logger.debug("Updated configuration for box as a whole")
+
+        return self.get_config()
+
     def get_api_info(self) -> dict:
         """Fetch API version and available endpoints."""
         logger.info("Fetching API information")
