@@ -1164,19 +1164,38 @@ class APIClient:
         if self._generation == "legacy":
             endpoint = "/nodeinfoget"
             response = self.session.get(endpoint, params={"node": node_id})
+            response.raise_for_status()
+            logger.debug("Received node info for node ID: {}", node_id)
+            
+            data = response.json()
+            
+            # For node 1 (BOX node), merge energy data from /boxinfoget
+            if node_id == 1:
+                try:
+                    logger.debug("Fetching energy data from /boxinfoget for BOX node")
+                    box_response = self.session.get("/boxinfoget")
+                    box_response.raise_for_status()
+                    box_data = box_response.json()
+                    
+                    # Merge EnergyInfo and EnergyFan into node data
+                    if "EnergyInfo" in box_data:
+                        data["EnergyInfo"] = box_data["EnergyInfo"]
+                        logger.debug("Merged EnergyInfo into BOX node data")
+                    if "EnergyFan" in box_data:
+                        data["EnergyFan"] = box_data["EnergyFan"]
+                        logger.debug("Merged EnergyFan into BOX node data")
+                except Exception as e:
+                    logger.warning("Failed to fetch energy data for BOX node: {}", e)
+                    # Continue without energy data - it's optional
+            
+            data = self._transform_gen1_node_info(data)
         else:
             endpoint = self._map_endpoint(f"/info/nodes/{node_id}")
             response = self.session.get(endpoint)
-        
-        response.raise_for_status()
-        logger.debug("Received node info for node ID: {}", node_id)
-        
-        data = response.json()
-        
-        # Transform responses to ensure consistent structure
-        if self._generation == "legacy":
-            data = self._transform_gen1_node_info(data)
-        else:
+            response.raise_for_status()
+            logger.debug("Received node info for node ID: {}", node_id)
+            
+            data = response.json()
             # Also transform modern API to move network fields to NetworkDuco
             data = self._transform_modern_node_info(data)
         
