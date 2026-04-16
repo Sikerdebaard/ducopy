@@ -599,6 +599,7 @@ class APIClient:
                 "TimeStateEnd": {"Val": gen1_data.get("endtime")} if gen1_data.get("endtime", 0) != 0 else None,
                 "Mode": {"Val": gen1_data.get("mode")} if gen1_data.get("mode") and gen1_data.get("mode") != "-" else None,
                 "FlowLvlTgt": {"Val": gen1_data.get("trgt")} if gen1_data.get("trgt") is not None else None,
+                "FlowLvl": {"Val": gen1_data.get("actl")} if gen1_data.get("actl") is not None else None,
             } if any(k in gen1_data for k in ["state", "ovrl", "mode"]) else None,
             "Sensor": sensor_fields if sensor_fields else None,
         }

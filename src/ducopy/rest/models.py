@@ -253,10 +253,11 @@ class VentilationInfo(BaseModel):
     TimeStateEnd: int | None = None
     Mode: str | None = None
     FlowLvlTgt: int | None = None
+    FlowLvl: int | None = None
 
     @unified_validator()
     def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "State"]
+        fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "FlowLvl", "State"]
 
         # Define keyword mappings for transformations
         time_fields = [field for field in values if "time" in field.lower()]
