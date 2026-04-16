@@ -51,6 +51,8 @@ from loguru import logger
 import importlib.resources as pkg_resources
 from ducopy import certs
 import json
+import urllib3.exceptions
+import requests.exceptions
 
 
 class APIClient:
@@ -96,6 +98,28 @@ class APIClient:
         logger.debug("Using certificate at path: {}", pem_path)
 
         return str(pem_path)
+
+    def _try_legacy_endpoint(self) -> bool:
+        """
+        Try to access a legacy-specific endpoint to confirm legacy board.
+        
+        Returns:
+            bool: True if legacy endpoint responds successfully, False otherwise
+        """
+        try:
+            logger.debug("Attempting to confirm legacy board via /board_info endpoint...")
+            response = self.session.request("GET", "/board_info", ensure_apikey=False)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Legacy board should return data with 'mac' and 'serial' fields
+            if "mac" in data or "serial" in data:
+                logger.info("Legacy board confirmed via /board_info endpoint")
+                return True
+        except Exception as e:
+            logger.debug("Legacy endpoint check failed: {}", e)
+        
+        return False
 
     def detect_generation(self) -> dict:
         """
@@ -194,12 +218,51 @@ class APIClient:
         except Exception as e:
             error_message = str(e)
             
+            # Check for header parsing errors (legacy Communication/Print board returns malformed headers)
+            is_header_error = False
+            if isinstance(e, (urllib3.exceptions.HeaderParsingError, urllib3.exceptions.HTTPError)):
+                is_header_error = True
+                logger.debug("Detected header parsing error: {}", e)
+            elif isinstance(e, requests.exceptions.RequestException):
+                # Check if the error message indicates header parsing issues
+                if "header" in error_message.lower() and ("parsing" in error_message.lower() or "invalid" in error_message.lower()):
+                    is_header_error = True
+                    logger.debug("Detected header-related error in request: {}", e)
+            
+            # If header parsing error on HTTP, try legacy endpoint to confirm
+            if is_header_error and not is_https:
+                logger.info("Header parsing error on HTTP detected - likely legacy Communication and Print Board")
+                if self._try_legacy_endpoint():
+                    self._generation = "legacy"
+                    self._board_type = "Communication and Print Board"
+                    logger.info("Detected Communication and Print Board (legacy API) - confirmed via /board_info endpoint")
+                    
+                    # Cache device identification info
+                    self._cache_device_info()
+                    
+                    return {
+                        "generation": self._generation,
+                        "api_version": None,
+                        "public_api_version": None,
+                        "protocol": "HTTP",
+                        "board_type": self._board_type,
+                        "mac_address": self._mac_address,
+                        "board_serial": self._board_serial
+                    }
+            
             # Check if it's a 404 error on /info
             if "404" in error_message:
-                # /info returns 404 = Communication and Print Board (legacy API)
-                self._generation = "legacy"
-                self._board_type = "Communication and Print Board"
-                logger.info("Detected Communication and Print Board (legacy API) - /info endpoint not found (404)")
+                # /info returns 404 - try legacy endpoint to confirm
+                logger.debug("/info endpoint returned 404, checking if it's a legacy board...")
+                if self._try_legacy_endpoint():
+                    self._generation = "legacy"
+                    self._board_type = "Communication and Print Board"
+                    logger.info("Detected Communication and Print Board (legacy API) - /info not found, confirmed via /board_info")
+                else:
+                    # 404 but legacy endpoint also failed
+                    self._generation = "legacy"
+                    self._board_type = "Communication and Print Board"
+                    logger.info("Detected Communication and Print Board (legacy API) - /info endpoint not found (404)")
                 
                 # Cache device identification info
                 self._cache_device_info()
