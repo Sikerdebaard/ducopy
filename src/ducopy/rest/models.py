@@ -246,6 +246,38 @@ class NetworkDucoInfo(BaseModel):
         return values
 
 
+class VentilationFanInfo(BaseModel):
+    """Fan information including speeds and pressures."""
+    SpeedSup: int | None = None
+    SpeedEha: int | None = None
+    PressSup: int | None = None
+    PressEha: int | None = None
+
+    @unified_validator()
+    def validate_fan_fields(cls, values: dict[str, dict | int]) -> dict[str, dict | int]:
+        fields_to_extract = ["SpeedSup", "SpeedEha", "PressSup", "PressEha"]
+        for field in fields_to_extract:
+            if field in values:
+                values[field] = extract_val(values[field])
+        return values
+
+
+class VentilationSensorInfo(BaseModel):
+    """Sensor information including temperatures."""
+    TempOda: float | None = None
+    TempSup: float | None = None
+    TempEta: float | None = None
+    TempEha: float | None = None
+
+    @unified_validator()
+    def validate_sensor_fields(cls, values: dict[str, dict | float]) -> dict[str, dict | float]:
+        fields_to_extract = ["TempOda", "TempSup", "TempEta", "TempEha"]
+        for field in fields_to_extract:
+            if field in values:
+                values[field] = extract_val(values[field])
+        return values
+
+
 class VentilationInfo(BaseModel):
     State: str | None = None
     FlowLvlOvrl: int | None = None
@@ -254,6 +286,8 @@ class VentilationInfo(BaseModel):
     Mode: str | None = None
     FlowLvlTgt: int | None = None
     FlowLvl: int | None = None
+    Fan: VentilationFanInfo | None = None
+    Sensor: VentilationSensorInfo | None = None
 
     @unified_validator()
     def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
@@ -278,6 +312,34 @@ class VentilationInfo(BaseModel):
         return values
 
 
+class HeatRecoveryGeneralInfo(BaseModel):
+    """Heat recovery general information."""
+    TimeFilterRemain: int | None = None
+
+    @unified_validator()
+    def validate_hr_general_fields(cls, values: dict[str, dict | int]) -> dict[str, dict | int]:
+        if "TimeFilterRemain" in values:
+            values["TimeFilterRemain"] = extract_val(values["TimeFilterRemain"])
+        return values
+
+
+class HeatRecoveryBypassInfo(BaseModel):
+    """Heat recovery bypass information."""
+    Pos: int | None = None
+
+    @unified_validator()
+    def validate_bypass_fields(cls, values: dict[str, dict | int]) -> dict[str, dict | int]:
+        if "Pos" in values:
+            values["Pos"] = extract_val(values["Pos"])
+        return values
+
+
+class HeatRecoveryInfo(BaseModel):
+    """Heat recovery information."""
+    General: HeatRecoveryGeneralInfo | None = None
+    Bypass: HeatRecoveryBypassInfo | None = None
+
+
 class SensorData(BaseModel):
     """Dynamically captures sensor data, including environmental sensors."""
 
@@ -295,6 +357,7 @@ class NodeInfo(BaseModel):
     General: NodeGeneralInfo
     NetworkDuco: NetworkDucoInfo | None = None
     Ventilation: VentilationInfo | None = None
+    HeatRecovery: HeatRecoveryInfo | None = None
     Sensor: SensorData | None = Field(default=None)
 
     @unified_validator()

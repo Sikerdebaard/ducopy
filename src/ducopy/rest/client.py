@@ -533,9 +533,46 @@ class APIClient:
                 proper_key = sensor_key_mapping.get(normalized_key, normalized_key.capitalize())
                 sensor_fields[proper_key] = {"Val": gen1_data[key]}
         
+        # Extract energy and fan info from nested structures (Communication/Print board)
+        energy_info = gen1_data.get("EnergyInfo", {})
+        energy_fan = gen1_data.get("EnergyFan", {})
+        
+        # Build Ventilation.Sensor from EnergyInfo temperatures
+        ventilation_sensor = {}
+        temp_mapping = {
+            "TempODA": "TempOda",
+            "TempSUP": "TempSup", 
+            "TempETA": "TempEta",
+            "TempEHA": "TempEha"
+        }
+        for comm_key, conn_key in temp_mapping.items():
+            if comm_key in energy_info:
+                ventilation_sensor[conn_key] = {"Val": energy_info[comm_key]}
+        
+        # Build Ventilation.Fan from EnergyFan
+        ventilation_fan = {}
+        fan_mapping = {
+            "SupplyFanSpeed": "SpeedSup",
+            "ExhaustFanSpeed": "SpeedEha",
+            "SupplyFanPressActual": "PressSup",
+            "ExhaustFanPressActual": "PressEha"
+        }
+        for comm_key, conn_key in fan_mapping.items():
+            if comm_key in energy_fan:
+                ventilation_fan[conn_key] = {"Val": energy_fan[comm_key]}
+        
+        # Build HeatRecovery info from EnergyInfo
+        hr_general = {}
+        if "FilterRemainingTime" in energy_info:
+            hr_general["TimeFilterRemain"] = {"Val": energy_info["FilterRemainingTime"]}
+        
+        hr_bypass = {}
+        if "BypassStatus" in energy_info:
+            hr_bypass["Pos"] = {"Val": energy_info["BypassStatus"]}
+        
         # Also check for any other potential sensor fields by looking for numeric values
         # that aren't already captured in other sections
-        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr", "sw", "swver", "swversion", "serial", "serialboard", "serialnode", "serialnb"}
+        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr", "sw", "swver", "swversion", "serial", "serialboard", "serialnode", "serialnb", "EnergyInfo", "EnergyFan"}
         known_non_sensor_keys.update(network_fields.keys())  # Exclude network fields
         for key, value in gen1_data.items():
             if key not in known_non_sensor_keys and isinstance(value, (int, float)):
@@ -600,7 +637,13 @@ class APIClient:
                 "Mode": {"Val": gen1_data.get("mode")} if gen1_data.get("mode") and gen1_data.get("mode") != "-" else None,
                 "FlowLvlTgt": {"Val": gen1_data.get("trgt")} if gen1_data.get("trgt") is not None else None,
                 "FlowLvl": {"Val": gen1_data.get("actl")} if gen1_data.get("actl") is not None else None,
-            } if any(k in gen1_data for k in ["state", "ovrl", "mode"]) else None,
+                "Fan": ventilation_fan if ventilation_fan else None,
+                "Sensor": ventilation_sensor if ventilation_sensor else None,
+            } if any(k in gen1_data for k in ["state", "ovrl", "mode", "EnergyInfo", "EnergyFan"]) else None,
+            "HeatRecovery": {
+                "General": hr_general if hr_general else None,
+                "Bypass": hr_bypass if hr_bypass else None,
+            } if (hr_general or hr_bypass) else None,
             "Sensor": sensor_fields if sensor_fields else None,
         }
 
