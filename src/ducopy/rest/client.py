@@ -916,7 +916,7 @@ class APIClient:
             nodes_response = self.get_nodes()
             node_configs = []
             failed_nodes = []
-            node_ids = [node.Node for node in nodes_response.Nodes] if nodes_response.Nodes else []
+            node_ids = [node.Node for node in nodes_response.Nodes]
             logger.info("Communication and Print Board detected - fetching config for {} nodes", len(node_ids))
             
             for node_id in node_ids:

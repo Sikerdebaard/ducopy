@@ -398,7 +398,7 @@ class NodeInfo(BaseModel):
 
 
 class NodesInfoResponse(BaseModel):
-    Nodes: list[NodeInfo] | None = Field(default=None)
+    Nodes: list[NodeInfo] = Field(default_factory=list)
 
 
 # ConfigNodeResponse for specific node configuration
