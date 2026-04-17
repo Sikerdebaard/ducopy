@@ -103,19 +103,26 @@ class APIClient:
         """
         Try to access a legacy-specific endpoint to confirm legacy board.
         
+        Attempts to access /boxinfoget which is the standard legacy endpoint.
+        This helps distinguish a genuine Communication and Print Board from
+        other error conditions (network issues, wrong URL, etc.)
+        
         Returns:
             bool: True if legacy endpoint responds successfully, False otherwise
         """
         try:
-            logger.debug("Attempting to confirm legacy board via /board_info endpoint...")
-            response = self.session.request("GET", "/board_info", ensure_apikey=False)
+            logger.debug("Attempting to confirm legacy board via /boxinfoget endpoint...")
+            response = self.session.request("GET", "/boxinfoget", ensure_apikey=False)
             response.raise_for_status()
             data = response.json()
             
-            # Legacy board should return data with 'mac' and 'serial' fields
-            if "mac" in data or "serial" in data:
-                logger.info("Legacy board confirmed via /board_info endpoint")
+            # Legacy board should return data with expected fields
+            # Check for common fields like 'board', 'serial', 'mac', or node-related data
+            if isinstance(data, dict) and ("board" in data or "serial" in data or "mac" in data or "node" in data):
+                logger.info("Legacy board confirmed via /boxinfoget endpoint")
                 return True
+            else:
+                logger.debug("Unexpected response format from /boxinfoget: {}", data)
         except Exception as e:
             logger.debug("Legacy endpoint check failed: {}", e)
         
@@ -237,7 +244,7 @@ class APIClient:
                 if self._try_legacy_endpoint():
                     self._generation = "legacy"
                     self._board_type = "Communication and Print Board"
-                    logger.info("Detected Communication and Print Board (legacy API) - confirmed via /board_info endpoint")
+                    logger.info("Detected Communication and Print Board (legacy API) - confirmed via /boxinfoget endpoint")
                     
                     # Cache device identification info
                     self._cache_device_info()
@@ -259,25 +266,31 @@ class APIClient:
                 if self._try_legacy_endpoint():
                     self._generation = "legacy"
                     self._board_type = "Communication and Print Board"
-                    logger.info("Detected Communication and Print Board (legacy API) - /info not found, confirmed via /board_info")
+                    logger.info("Detected Communication and Print Board (legacy API) - /info not found, confirmed via /boxinfoget")
+                    
+                    # Cache device identification info
+                    self._cache_device_info()
+                    
+                    return {
+                        "generation": self._generation,
+                        "api_version": None,
+                        "public_api_version": None,
+                        "protocol": "HTTPS" if is_https else "HTTP",
+                        "board_type": self._board_type,
+                        "mac_address": self._mac_address,
+                        "board_serial": self._board_serial
+                    }
                 else:
-                    # 404 but legacy endpoint also failed
-                    self._generation = "legacy"
-                    self._board_type = "Communication and Print Board"
-                    logger.info("Detected Communication and Print Board (legacy API) - /info endpoint not found (404)")
-                
-                # Cache device identification info
-                self._cache_device_info()
-                
-                return {
-                    "generation": self._generation,
-                    "api_version": None,
-                    "public_api_version": None,
-                    "protocol": "HTTPS" if is_https else "HTTP",
-                    "board_type": self._board_type,
-                    "mac_address": self._mac_address,
-                    "board_serial": self._board_serial
-                }
+                    # 404 but legacy endpoint also failed - this is not a valid board
+                    logger.error(
+                        "Received 404 from /info endpoint but could not confirm legacy board via /boxinfoget. "
+                        "This may indicate an incorrect URL, network issues, or an unsupported device."
+                    )
+                    raise ConnectionError(
+                        f"Unable to detect API generation at {self.base_url}. "
+                        "The /info endpoint returned 404, but the legacy /boxinfoget endpoint also failed. "
+                        "Please verify the URL is correct and the device is accessible."
+                    ) from e
             
             # Check if it's a timeout or connection error with HTTPS
             if is_https and ("timeout" in error_message.lower() or "connection" in error_message.lower()):
@@ -419,11 +432,11 @@ class APIClient:
                 
                 # Try /boardinfo endpoint for MAC and serial
                 try:
-                    response = self.session.request("GET", "/board_info", ensure_apikey=False)
+                    response = self.session.request("GET", "/boardinfo", ensure_apikey=False)
                     response.raise_for_status()
                     board_data = response.json()
                     
-                    # Communication/Print board /board_info returns plain values:
+                    # Communication/Print board /boardinfo returns plain values:
                     # {"serial": "PRSN21401066", "mac": "00:08:5f:35:a8:0f", "swversion": "16036.13.4.0", "uptime": 2452}
                     self._mac_address = board_data.get("mac")
                     self._board_serial = board_data.get("serial")
@@ -1340,7 +1353,7 @@ class APIClient:
                 "Uptime": getattr(self, '_board_uptime', None)
             }
             
-            # If not cached yet, try to fetch from /board_info
+            # If not cached yet, try to fetch from /boardinfo
             if not self._device_info_cached:
                 self._cache_device_info()
                 board_info["Mac"] = self._mac_address
