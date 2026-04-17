@@ -404,8 +404,18 @@ class NodesInfoResponse(BaseModel):
     def filter_none_nodes(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Filter out any None values from Nodes list as defensive measure."""
         if "Nodes" in values and values["Nodes"] is not None:
+            original_count = len(values["Nodes"])
             # Filter out None values (should never happen, but be defensive)
             values["Nodes"] = [node for node in values["Nodes"] if node is not None]
+            filtered_count = len(values["Nodes"])
+            
+            # Log if we filtered out any None values (indicates API issue)
+            if filtered_count < original_count:
+                from loguru import logger
+                logger.warning(
+                    "Filtered out {} None node(s) from API response - this indicates unexpected API behavior",
+                    original_count - filtered_count
+                )
         return values
 
 
