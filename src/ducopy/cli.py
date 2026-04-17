@@ -43,7 +43,6 @@ from ducopy.ducopy import DucoPy
 from rich.console import Console
 from rich.pretty import Pretty
 from urllib.parse import urlparse
-import pprint
 
 from ducopy.rest.models import ConfigNodeRequest
 
@@ -76,7 +75,7 @@ def print_output(data: Any, format: str) -> None:  # noqa: ANN401
     # Recursively convert Pydantic models to dicts
     def convert_to_dict(obj):
         if isinstance(obj, BaseModel):
-            return obj.dict() if hasattr(obj, 'dict') else obj.model_dump()
+            return obj.model_dump() if hasattr(obj, "model_dump") else obj.dict()
         elif isinstance(obj, dict):
             return {k: convert_to_dict(v) for k, v in obj.items()}
         elif isinstance(obj, (list, tuple)):

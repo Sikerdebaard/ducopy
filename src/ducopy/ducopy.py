@@ -243,11 +243,14 @@ class DucoPy:
         regardless of board type (Connectivity Board or Communication/Print Board).
         
         Returns:
-            dict: Board information with the following structure:
+            dict: Board information returned by the underlying API client. The response
+            includes the common fields below and may include additional board-specific
+            fields such as uptime on legacy boards:
                 {
                     "Mac": str,           # MAC address (e.g., "AA:BB:CC:DD:EE:FF")
                     "Serial": str,        # Board serial number (e.g., "BOARD123456")
                     "SwVersion": str,     # Software version (e.g., "2.0.6.0" or "16010.3.7.0")
+                    "Uptime": str,        # Optional uptime value on boards that expose it
                 }
                 
         Example:

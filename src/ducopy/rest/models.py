@@ -41,7 +41,7 @@ from functools import wraps
 try:
     from pydantic import VERSION
     PYDANTIC_V2 = int(VERSION.split('.')[0]) >= 2
-except (ImportError, AttributeError):
+except (ImportError, AttributeError, ValueError, TypeError):
     # Fallback: try importing model_validator which only exists in V2
     try:
         from pydantic import model_validator
@@ -128,8 +128,11 @@ class NodeConfig(BaseModel):
     @unified_validator()
     def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
-        if "node" in values and "Node" not in values:
-            values["Node"] = values.pop("node")
+        node_value = values.get("Node", values.get("node"))
+        if node_value is not None:
+            values["Node"] = node_value
+        # Remove any lowercase 'node' key to avoid duplicates and ensure normalization
+        values.pop("node", None)
         return values
 
 

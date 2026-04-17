@@ -123,18 +123,20 @@ class APIClient:
 
     def detect_generation(self) -> dict:
         """
-        Detect the API generation by trying HTTPS and HTTP with /info endpoint.
+        Detect the API generation using the configured base URL and the /info endpoint.
         
         This method determines whether we're communicating with:
-        - Connectivity Board (modern API): HTTPS, /info endpoint exists
+        - Connectivity Board (modern API): /info endpoint exists
           Includes V1 and V2 variants
-        - Communication and Print Board (legacy API): HTTP only, /info returns 404
+        - Communication and Print Board (legacy API): /info returns 404 or legacy data
         
         Detection logic:
-        1. Try HTTPS with /info - if successful, it's Connectivity Board
-        2. If HTTPS fails, try HTTP with /info
-        3. If /info returns 404, it's Communication and Print Board
-        4. If /info succeeds on HTTP, check version to determine board type
+        1. Use the currently configured base URL and session to request /info
+        2. If /info returns modern API data, classify it as a Connectivity Board
+        3. If /info indicates a legacy response or returns 404, classify it as a
+           Communication and Print Board
+        4. This method does not retry with a different protocol; if HTTPS is used
+           against a legacy HTTP-only board, a connection-related error may be raised
         
         Returns:
             dict: API information including version details and board type
@@ -149,7 +151,7 @@ class APIClient:
             logger.debug("Attempting to fetch /info endpoint...")
             response = self.session.request("GET", "/info", ensure_apikey=False)
             response.raise_for_status()
-            info_response = response.json()
+            response.json()
             
             # If we got here, /info exists
             if is_https:
@@ -466,6 +468,13 @@ class APIClient:
             if endpoint.startswith("/config/nodes/"):
                 node_id = endpoint.split("/")[-1]
                 mapped = f"/nodeconfigget?node={node_id}"
+                logger.debug("Mapped endpoint {} to Communication and Print Board endpoint: {}", endpoint, mapped)
+                return mapped
+
+            # /info/nodes/{id} -> /nodeinfoget?node={id}
+            if endpoint.startswith("/info/nodes/"):
+                node_id = endpoint.split("/")[-1]
+                mapped = f"/nodeinfoget?node={node_id}"
                 logger.debug("Mapped endpoint {} to Communication and Print Board endpoint: {}", endpoint, mapped)
                 return mapped
         
@@ -813,8 +822,7 @@ class APIClient:
         """
         if self.is_legacy_api:
             raise NotImplementedError(
-                "Updating node configuration is not available on the Communication and Print Board. "
-                "This feature is only available on the Connectivity Board."
+                "Updating node configuration is not available when using the legacy API."
             )
         
         logger.info("Updating configuration for node ID: {}", node_id)
