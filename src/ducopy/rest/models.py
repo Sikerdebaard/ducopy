@@ -91,6 +91,35 @@ def extract_val(data: dict | str | int) -> str | int | dict:
     return data
 
 
+# Helper function to normalize 'node' key to 'Node'
+def normalize_node_key(values: dict[str, Any]) -> dict[str, Any]:
+    """
+    Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board).
+    Handles various formats:
+    - lowercase 'node' -> uppercase 'Node'
+    - extracts value from either key
+    - removes duplicate lowercase key
+    """
+    node_value = values.get("Node", values.get("node"))
+    if node_value is not None:
+        values["Node"] = node_value
+    # Remove any lowercase 'node' key to avoid duplicates
+    values.pop("node", None)
+    return values
+
+
+# Helper function to normalize Node field and extract Val
+def normalize_node_with_val(values: dict[str, Any]) -> dict[str, Any]:
+    """
+    Normalize Node field which can be:
+    - Communication/Print board: {"Val": 1}
+    - Connectivity board: 1
+    """
+    if "Node" in values:
+        values["Node"] = extract_val(values["Node"])
+    return values
+
+
 class ParameterConfig(BaseModel):
     Id: int | None = Field(default=None)
     Val: int | str
@@ -128,12 +157,7 @@ class NodeConfig(BaseModel):
     @unified_validator()
     def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
-        node_value = values.get("Node", values.get("node"))
-        if node_value is not None:
-            values["Node"] = node_value
-        # Remove any lowercase 'node' key to avoid duplicates and ensure normalization
-        values.pop("node", None)
-        return values
+        return normalize_node_key(values)
 
 
 class NodesResponse(BaseModel):
@@ -370,9 +394,7 @@ class NodeInfo(BaseModel):
         - Communication/Print board: {"Val": 1}
         - Connectivity board: 1
         """
-        if "Node" in values:
-            values["Node"] = extract_val(values["Node"])
-        return values
+        return normalize_node_with_val(values)
 
 
 class NodesInfoResponse(BaseModel):
@@ -403,9 +425,7 @@ class ConfigNodeResponse(BaseModel):
     @unified_validator()
     def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
-        if "node" in values and "Node" not in values:
-            values["Node"] = values.pop("node")
-        return values
+        return normalize_node_key(values)
 
 
 class ConfigNodeRequest(BaseModel):
