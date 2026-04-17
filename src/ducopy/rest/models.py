@@ -400,6 +400,14 @@ class NodeInfo(BaseModel):
 class NodesInfoResponse(BaseModel):
     Nodes: list[NodeInfo] = Field(default_factory=list)
 
+    @unified_validator()
+    def filter_none_nodes(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Filter out any None values from Nodes list as defensive measure."""
+        if "Nodes" in values and values["Nodes"] is not None:
+            # Filter out None values (should never happen, but be defensive)
+            values["Nodes"] = [node for node in values["Nodes"] if node is not None]
+        return values
+
 
 # ConfigNodeResponse for specific node configuration
 class ConfigNodeResponse(BaseModel):
