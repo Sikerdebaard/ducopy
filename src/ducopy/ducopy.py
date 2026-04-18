@@ -65,7 +65,8 @@ class DucoPy:
         self.client = APIClient(base_url, verify)
         logger.info("Initialized DucoPy with base URL: {}", base_url)
 
-    def configure_logging(self, level: str = "INFO", sink: object = sys.stdout) -> None:
+    @classmethod
+    def configure_logging(cls, level: str = "INFO", sink: object = sys.stdout) -> None:
         """Configure logging for the DucoPy library.
         
         Args:

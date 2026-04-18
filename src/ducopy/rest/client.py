@@ -59,9 +59,12 @@ class APIClient:
     # Mapping of Connectivity Board endpoints to Communication and Print Board endpoints
     # Connectivity Board = modern API (family includes V1 and V2 boards)
     # Communication and Print Board = legacy API
+    #
+    # Note: do not map the modern "/api" endpoint to "/boxinfoget".
+    # "/boxinfoget" returns legacy board/device metadata, not API metadata,
+    # so remapping would make callers receive misleading data for API-info requests.
     GEN1_ENDPOINT_MAP = {
         "/info": "/boxinfoget",
-        "/api": "/boxinfoget",
         "/info/nodes": "/nodelist",
         "/config/nodes": "/boxinfoget",
     }
@@ -116,13 +119,17 @@ class APIClient:
             response.raise_for_status()
             data = response.json()
             
-            # Legacy board should return data with expected fields
-            # Check for common fields like 'board', 'serial', 'mac', or node-related data
-            if isinstance(data, dict) and ("board" in data or "serial" in data or "mac" in data or "node" in data):
-                logger.info("Legacy board confirmed via /boxinfoget endpoint")
-                return True
-            else:
-                logger.debug("Unexpected response format from /boxinfoget: {}", data)
+            if isinstance(data, dict):
+                # Legacy /boxinfoget responses can be either flat key/value payloads
+                # or section-based payloads such as {"General": ..., "Network": ...}.
+                legacy_keys = {"board", "serial", "mac", "node"}
+                legacy_sections = {"General", "Network", "EnergyInfo"}
+                
+                if any(key in data for key in legacy_keys | legacy_sections) or len(data) > 0:
+                    logger.info("Legacy board confirmed via /boxinfoget endpoint")
+                    return True
+            
+            logger.debug("Unexpected response format from /boxinfoget: {}", data)
         except Exception as e:
             logger.debug("Legacy endpoint check failed: {}", e)
         
@@ -260,7 +267,12 @@ class APIClient:
                     }
             
             # Check if it's a 404 error on /info
-            if "404" in error_message:
+            is_not_found_error = (
+                isinstance(e, requests.exceptions.HTTPError)
+                and e.response is not None
+                and e.response.status_code == 404
+            )
+            if is_not_found_error:
                 # /info returns 404 - try legacy endpoint to confirm
                 logger.debug("/info endpoint returned 404, checking if it's a legacy board...")
                 if self._try_legacy_endpoint():
@@ -990,7 +1002,7 @@ class APIClient:
             data = self._transform_gen1_info(data)
             
             # Enrich with cached device info (MAC, serial) for legacy boards
-            # This info is only available in /communication endpoint on legacy boards
+            # This info is only available via the /boardinfo endpoint on legacy boards
             if self._mac_address or self._board_serial:
                 logger.debug("Enriching legacy board response with cached device info")
                 
