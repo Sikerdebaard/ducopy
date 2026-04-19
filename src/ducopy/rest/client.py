@@ -220,7 +220,8 @@ class APIClient:
             if self._generation == "modern" and not is_https:
                 logger.warning(
                     "Connectivity Board detected but connected via HTTP. "
-                    "For better security, consider using HTTPS instead: https://{}", 
+                    "Some data may be missing or unavailable as Connectivity Boards are designed for HTTPS. "
+                    "For full functionality and better security, use HTTPS instead: https://{}", 
                     str(self.base_url).replace("http://", "").rstrip("/")
                 )
             
