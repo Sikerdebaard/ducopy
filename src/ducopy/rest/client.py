@@ -329,7 +329,22 @@ class APIClient:
             # Check if it's an SSL/TLS error with HTTPS
             # Legacy boards (HTTP-only) often produce SSLError when contacted via HTTPS
             is_ssl_error = isinstance(e, (requests.exceptions.SSLError, urllib3.exceptions.SSLError))
-            is_wrong_version_error = "wrong_version_number" in error_message.lower()
+            
+            # Check for "wrong version" error patterns in message and chained exceptions
+            # OpenSSL/urllib3 may use "wrong version number", "WRONG_VERSION_NUMBER", or "wrong_version_number"
+            def has_wrong_version_error(exception: Exception) -> bool:
+                """Check if exception or its cause chain contains SSL wrong version error."""
+                current = exception
+                while current is not None:
+                    msg = str(current).lower()
+                    # Check for various forms: "wrong version number", "wrong_version_number", etc.
+                    if "wrong" in msg and "version" in msg:
+                        return True
+                    # Follow the exception chain
+                    current = current.__cause__ if hasattr(current, '__cause__') else None
+                return False
+            
+            is_wrong_version_error = has_wrong_version_error(e)
             
             if is_https and (is_ssl_error or is_wrong_version_error):
                 logger.warning("HTTPS SSL/TLS negotiation failed. Communication and Print Board may only support HTTP.")

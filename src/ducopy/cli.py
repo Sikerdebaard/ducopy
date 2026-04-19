@@ -75,7 +75,9 @@ def print_output(data: Any, format: str) -> None:  # noqa: ANN401
     # Recursively convert Pydantic models to dicts
     def convert_to_dict(obj: Any) -> Any:  # noqa: ANN401
         if isinstance(obj, BaseModel):
-            return obj.model_dump() if hasattr(obj, "model_dump") else obj.dict()
+            # Use mode='json' to ensure JSON-serializable output (converts URLs, datetimes, etc.)
+            # This prevents json.dumps() failures with Pydantic v2 non-serializable objects
+            return obj.model_dump(mode='json') if hasattr(obj, "model_dump") else obj.dict()
         elif isinstance(obj, dict):
             return {k: convert_to_dict(v) for k, v in obj.items()}
         elif isinstance(obj, (list, tuple)):
