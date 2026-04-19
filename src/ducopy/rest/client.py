@@ -78,6 +78,10 @@ class APIClient:
     # /info/nodes/{id} -> /nodeinfoget?node={id}
     # /config/nodes/{id} -> /nodeconfigget?node={id}
     
+    # Cache TTL for boxinfoget energy data (in seconds)
+    # This reduces redundant network calls when fetching node_id=1 repeatedly (e.g., in get_nodes())
+    BOXINFOGET_ENERGY_CACHE_TTL = 10
+    
     def __init__(self, base_url: HttpUrl, verify: bool = True, auto_detect: bool = True) -> None:
         self.base_url = base_url
         if verify:
@@ -97,6 +101,10 @@ class APIClient:
         self._board_swversion = None
         self._board_uptime = None
         self._device_info_cached = False
+        
+        # Legacy board energy data cache (reduces redundant /boxinfoget calls for node_id=1)
+        self._boxinfoget_energy_cache = None
+        self._boxinfoget_energy_cache_timestamp = 0
         
         logger.info("APIClient initialized with base URL: {}", base_url)
         
@@ -1347,17 +1355,37 @@ class APIClient:
             # For node 1 (BOX node), merge energy data from /boxinfoget
             if node_id == 1:
                 try:
-                    logger.debug("Fetching energy data from /boxinfoget for BOX node")
-                    box_response = self.session.get("/boxinfoget")
-                    box_response.raise_for_status()
-                    box_data = box_response.json()
+                    # Check if we have cached energy data that's still valid
+                    current_time = time.time()
+                    cache_age = current_time - self._boxinfoget_energy_cache_timestamp
                     
-                    # Merge EnergyInfo and EnergyFan into node data
-                    if "EnergyInfo" in box_data:
-                        data["EnergyInfo"] = box_data["EnergyInfo"]
+                    if self._boxinfoget_energy_cache and cache_age < self.BOXINFOGET_ENERGY_CACHE_TTL:
+                        logger.debug("Using cached energy data for BOX node (age: {:.1f}s)", cache_age)
+                        energy_data = self._boxinfoget_energy_cache
+                    else:
+                        logger.debug("Fetching energy data from /boxinfoget for BOX node (cache age: {:.1f}s)", cache_age)
+                        box_response = self.session.get("/boxinfoget")
+                        box_response.raise_for_status()
+                        box_data = box_response.json()
+                        
+                        # Extract and cache only the energy sections
+                        energy_data = {}
+                        if "EnergyInfo" in box_data:
+                            energy_data["EnergyInfo"] = box_data["EnergyInfo"]
+                        if "EnergyFan" in box_data:
+                            energy_data["EnergyFan"] = box_data["EnergyFan"]
+                        
+                        # Update cache
+                        self._boxinfoget_energy_cache = energy_data
+                        self._boxinfoget_energy_cache_timestamp = current_time
+                        logger.debug("Cached energy data for {} seconds", self.BOXINFOGET_ENERGY_CACHE_TTL)
+                    
+                    # Merge cached energy data into node data
+                    if "EnergyInfo" in energy_data:
+                        data["EnergyInfo"] = energy_data["EnergyInfo"]
                         logger.debug("Merged EnergyInfo into BOX node data")
-                    if "EnergyFan" in box_data:
-                        data["EnergyFan"] = box_data["EnergyFan"]
+                    if "EnergyFan" in energy_data:
+                        data["EnergyFan"] = energy_data["EnergyFan"]
                         logger.debug("Merged EnergyFan into BOX node data")
                 except Exception as e:
                     logger.warning("Failed to fetch energy data for BOX node: {}", e)

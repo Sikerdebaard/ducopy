@@ -34,6 +34,7 @@
 # SOFTWARE.
 #
 import requests
+import requests.exceptions
 from requests.adapters import HTTPAdapter
 import ssl
 from urllib.parse import urljoin
@@ -42,6 +43,7 @@ import time
 from ducopy.rest.apikeygenerator import ApiKeyGenerator
 from loguru import logger
 import urllib3
+import urllib3.exceptions
 import warnings
 
 
@@ -210,8 +212,34 @@ class DucoUrlSession(requests.Session):
                 else:
                     raise e
             except requests.RequestException as e:
+                # Fail fast for non-retryable errors like SSL/TLS issues
+                if self._is_non_retryable_error(e):
+                    logger.debug("Non-retryable error detected: {}", type(e).__name__)
+                    raise e
+                
                 if not self._retry_with_backoff(attempt, max_retries, url, e):
                     raise e
+
+    def _is_non_retryable_error(self, error: Exception) -> bool:
+        """Check if an error is non-retryable and should fail fast without backoff.
+        
+        Args:
+            error: The exception to check
+            
+        Returns:
+            bool: True if the error should not be retried (e.g., SSL errors, connection refused)
+        """
+        # SSL/TLS errors are not transient - wrong protocol, certificate issues, etc.
+        if isinstance(error, (requests.exceptions.SSLError, urllib3.exceptions.SSLError)):
+            return True
+        
+        # Connection refused typically means wrong port or service not running
+        if isinstance(error, requests.exceptions.ConnectionError):
+            error_msg = str(error).lower()
+            if "connection refused" in error_msg or "connection reset" in error_msg:
+                return True
+        
+        return False
 
     def _retry_with_backoff(self, attempt: int, max_retries: int, url: str, error: Exception) -> bool:
         logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, error)

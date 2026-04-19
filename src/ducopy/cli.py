@@ -341,10 +341,31 @@ def get_config_nodes(
 def get_api_info(
     base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
 ) -> None:
-    """Retrieve API information."""
+    """Retrieve API information. Also displays API generation info."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_api_info(), format)
+    
+    # Get generation info
+    generation_info = _build_generation_info(facade)
+    
+    # Get API info - handle NotImplementedError for legacy boards
+    try:
+        api_info_data = facade.get_api_info()
+    except NotImplementedError as exc:
+        board_type = generation_info.get("board_type", "unknown")
+        typer.echo(
+            f"Error: API info is not supported for board type '{board_type}'.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "api_info": api_info_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()
@@ -510,10 +531,31 @@ def get_actions_node(
 def get_logs(
     base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
 ) -> None:
-    """Retrieve API logs."""
+    """Retrieve API logs. Also displays API generation info."""
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
-    print_output(facade.get_logs(), format)
+    
+    # Get generation info
+    generation_info = _build_generation_info(facade)
+    
+    # Get logs - handle NotImplementedError for legacy boards
+    try:
+        logs_data = facade.get_logs()
+    except NotImplementedError as exc:
+        board_type = generation_info.get("board_type", "unknown")
+        typer.echo(
+            f"Error: logs are not supported for board type '{board_type}'.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
+    
+    # Combine both
+    output = {
+        "generation_info": generation_info,
+        "logs": logs_data,
+    }
+    
+    print_output(output, format)
 
 
 @app.command()

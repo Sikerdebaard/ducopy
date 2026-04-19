@@ -1000,6 +1000,36 @@ def test_detect_generation_ssl_error_with_https() -> None:
         assert "Communication and Print Board" in error_message
 
 
+def test_ssl_error_fails_fast_without_retry() -> None:
+    """Test that SSL errors fail fast without retry delays."""
+    https_url = "https://localhost:5000"
+    
+    with requests_mock.Mocker() as mock_requests:
+        # Simulate SSLError - should not be retried
+        mock_requests.get(
+            f"{https_url}/info",
+            exc=requests.exceptions.SSLError("SSL: WRONG_VERSION_NUMBER")
+        )
+        
+        client = APIClient(base_url=https_url, verify=False, auto_detect=False)
+        
+        # Measure time to ensure no retry delays
+        import time
+        start_time = time.time()
+        
+        with pytest.raises(ConnectionError):
+            client.detect_generation()
+        
+        elapsed = time.time() - start_time
+        
+        # Should fail immediately (< 0.5s), not retry with backoff (2s + 4s = 6s+)
+        # If retries were happening, we'd see delays of 2^0=1s, 2^1=2s, totaling 3+ seconds
+        assert elapsed < 1.0, f"SSL error should fail fast, but took {elapsed:.2f}s (expected < 1.0s)"
+        
+        # Verify only one request was made (no retries)
+        assert len(mock_requests.request_history) == 1
+
+
 def test_raw_post_default_content_type(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
     """Test that raw_post sets Content-Type: application/json by default."""
     # Set API key directly to avoid /info parsing dependency
@@ -1070,3 +1100,47 @@ def test_raw_patch_custom_content_type(client: APIClient, mock_requests: request
     
     # Verify Content-Type was set to application/xml
     assert mock_requests.last_request.headers["Content-Type"] == "application/xml"
+
+
+def test_get_node_info_legacy_energy_caching(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that energy data for node_id=1 is cached to reduce redundant /boxinfoget calls."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Mock the node info response
+    node_data = {
+        "node": 1,
+        "devtype": "BOX",
+        "addr": 0,
+        "state": "AUTO",
+    }
+    mock_requests.get(f"{BASE_URL}/nodeinfoget", json=node_data)
+    
+    # Mock the boxinfoget response with energy data
+    box_data = {
+        "General": {"Time": 1730471603},
+        "EnergyInfo": {"Power": {"Val": 150}},
+        "EnergyFan": {"Speed": {"Val": 2500}},
+    }
+    mock_requests.get(f"{BASE_URL}/boxinfoget", json=box_data)
+    
+    # First call - should fetch from /boxinfoget
+    node_info_1 = client.get_node_info(node_id=1)
+    assert node_info_1.Node == 1
+    
+    # Count how many times /boxinfoget was called (excluding the one from mock_detection_endpoint_legacy)
+    boxinfoget_calls_before = len([req for req in mock_requests.request_history if "/boxinfoget" in req.url])
+    
+    # Second call - should use cached data
+    node_info_2 = client.get_node_info(node_id=1)
+    assert node_info_2.Node == 1
+    
+    # Verify /boxinfoget wasn't called again (count should be the same)
+    boxinfoget_calls_after = len([req for req in mock_requests.request_history if "/boxinfoget" in req.url])
+    
+    # Should only have 1 additional call (from first get_node_info), not 2
+    # The mock_detection_endpoint_legacy also calls /boxinfoget once, so we compare before/after
+    assert boxinfoget_calls_after - boxinfoget_calls_before == 0, \
+        "Energy data should be cached, but /boxinfoget was called again"
+
