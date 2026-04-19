@@ -158,11 +158,16 @@ class DucoUrlSession(requests.Session):
         """
         Sends a request, automatically prepending the base URL to the given URL if it's relative.
         Implements an exponential backoff retry strategy (up to 3 attempts) on request failures.
+        
+        Note: API key validation is automatically skipped for /info and /boxinfoget endpoints
+        to prevent circular dependencies, as _ensure_apikey() itself fetches these endpoints
+        to generate or validate API keys.
 
         Args:
             method (str): The HTTP method for the request (e.g., 'GET', 'POST').
             url (str): The relative or absolute URL path for the request.
             ensure_apikey (bool): Whether to automatically ensure an API key is present/valid.
+                                 Defaults to True, but automatically disabled for /info and /boxinfoget.
 
         Returns:
             Response: The HTTP response from the server.
@@ -170,7 +175,11 @@ class DucoUrlSession(requests.Session):
         Raises:
             requests.RequestException: If all retry attempts fail or another request-related error occurs.
         """
-        if ensure_apikey:
+        # Skip API key check for /info and /boxinfoget endpoints to avoid circular dependency
+        # and prevent duplicate requests (_ensure_apikey itself fetches these endpoints)
+        is_info_endpoint = url.rstrip("/") in ("/info", "/boxinfoget")
+        
+        if ensure_apikey and not is_info_endpoint:
             self._ensure_apikey()
 
         # Join the base URL with the provided URL path
