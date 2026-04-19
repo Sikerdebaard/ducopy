@@ -986,6 +986,11 @@ class APIClient:
     def get_api_info(self) -> dict:
         """Fetch API version and available endpoints."""
         logger.info("Fetching API information")
+        if self._generation == "legacy":
+            logger.warning("get_api_info() is not supported for legacy Communication/Print boards")
+            raise NotImplementedError(
+                "get_api_info() is not supported for legacy Communication/Print boards"
+            )
         endpoint = self._map_endpoint("/api")
         response = self.session.get(endpoint)
         response.raise_for_status()
