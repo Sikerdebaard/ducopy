@@ -787,14 +787,14 @@ def test_get_board_info_legacy_nodes_fetch_fails(client: APIClient, mock_request
     client._generation = "legacy"
     client._board_type = "Communication and Print Board"
     
-    # Pre-cache device info
+    # Pre-cache device info but WITHOUT swversion to trigger BOX node fallback
     client._mac_address = "00:08:5f:35:a8:0f"
     client._board_serial = "PRSN21401066"
-    client._board_swversion = "16036.13.4.0"  # Cached from /boardinfo
+    client._board_swversion = None  # Not available from /boardinfo - will trigger get_nodes() fallback
     client._board_uptime = 2452
     client._device_info_cached = True
     
-    # Mock the /nodelist endpoint to fail
+    # Mock the /nodelist endpoint to fail (simulates nodes fetch failure)
     mock_requests.get(f"{BASE_URL}/nodelist", status_code=500)
     
     board_info = client.get_board_info()
@@ -806,10 +806,11 @@ def test_get_board_info_legacy_nodes_fetch_fails(client: APIClient, mock_request
     assert "SwVersion" in board_info
     assert "Uptime" in board_info
     
-    # Verify MAC, Serial, and SwVersion from cached /boardinfo (nodes fetch failed but cached swversion still available)
+    # Verify MAC, Serial, and Uptime from cached /boardinfo
     assert board_info["Mac"] == "00:08:5f:35:a8:0f"
     assert board_info["Serial"] == "PRSN21401066"
-    assert board_info["SwVersion"] == "16036.13.4.0"  # From cached _board_swversion
+    # SwVersion should be None since /boardinfo didn't have it and nodes fetch failed
+    assert board_info["SwVersion"] is None
     assert board_info["Uptime"] == 2452
 
 
@@ -826,11 +827,12 @@ def test_get_board_info_legacy_swversion_fallback_to_box_node(client: APIClient,
     client._board_uptime = 2452
     client._device_info_cached = True
     
-    # Mock the legacy /nodelist endpoint to return node ids only.
-    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": ["BOX"]})
+    # Mock the legacy /nodelist endpoint to return integer node IDs
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1]})
 
     # Mock the legacy /nodeinfoget lookup used to fetch per-node details.
-    def nodeinfoget_callback(request, context):  # type: ignore[no-untyped-def]
+    # Return proper legacy response structure with integer node ID and required fields
+    def nodeinfoget_callback(request: Any, context: Any) -> dict[str, Any]:  # noqa: ANN401
         query_values = {key.lower(): value for key, value in request.qs.items()}
         requested_node = None
         for key in ("node", "nodeid", "nodename", "id", "name"):
@@ -839,11 +841,20 @@ def test_get_board_info_legacy_swversion_fallback_to_box_node(client: APIClient,
                 requested_node = values[0]
                 break
 
-        assert requested_node == "BOX"
+        assert requested_node == "1"  # Should be integer node ID
+        # Return legacy-shaped response with required fields for Pydantic validation
         return {
-            "Name": "BOX",
-            "SwVersion": "16036.13.4.0",
+            "node": 1,
+            "devtype": "BOX",
+            "addr": 1,
+            "state": "AUTO",
+            "ovrl": 255,
+            "cerr": 0,
+            "sw": "16036.13.4.0",
         }
+    
+    # Mock /boxinfoget for BOX node (node 1) energy data merge
+    mock_requests.get(f"{BASE_URL}/boxinfoget", json={})
 
     mock_requests.get(f"{BASE_URL}/nodeinfoget", json=nodeinfoget_callback)
     
