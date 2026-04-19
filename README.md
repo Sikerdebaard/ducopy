@@ -126,9 +126,21 @@ This will display a list of available commands.
 
 3. **Change node ventilation state**
 
+   For **Communication and Print Board** (legacy, HTTP):
    ```bash
-   ducopy change-action-node https://your-ducobox-ip --node-id 1 --action OperState --value AUTO
+   ducopy change-action-node http://your-ducobox-ip --node-id 1 --action OperState --value AUTO
    ```
+
+   For **Connectivity Board** (modern, HTTPS):
+   ```bash
+   # First, check available actions for the node
+   ducopy get-actions-node https://your-ducobox-ip --node-id 1
+   
+   # Then use a valid action from the list (e.g., SetVentilationState)
+   ducopy change-action-node https://your-ducobox-ip --node-id 1 --action SetVentilationState --value AUTO
+   ```
+
+   **Note**: Communication and Print Boards only support `OperState` and `SetVentilationState` actions. Connectivity Boards support additional actions that can be discovered using `get-actions-node`.
 
 #### Connectivity Board Only
 
