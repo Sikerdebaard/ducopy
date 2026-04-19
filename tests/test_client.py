@@ -244,6 +244,20 @@ def test_post_action_node_legacy_failure(client: APIClient, mock_requests: reque
         client.post_action_node(action="OperState", value="INVALID", node_id=1)
 
 
+def test_post_action_node_legacy_unsupported_action(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that unsupported actions raise NotImplementedError on Communication and Print Board."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Attempt to use an unsupported action (Reboot, SetParent, etc.)
+    with pytest.raises(NotImplementedError, match="Action 'Reboot' is not supported on Communication and Print Board"):
+        client.post_action_node(action="Reboot", value="true", node_id=1)
+    
+    with pytest.raises(NotImplementedError, match="Action 'SetParent' is not supported on Communication and Print Board"):
+        client.post_action_node(action="SetParent", value="5", node_id=1)
+
+
 def test_get_node_info_legacy(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
     """Test get_node_info on Communication and Print Board."""
     mock_detection_endpoint_legacy(mock_requests)

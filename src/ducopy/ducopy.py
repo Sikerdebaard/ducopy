@@ -45,6 +45,7 @@ from ducopy.rest.models import (
 )
 from loguru import logger
 from pydantic import HttpUrl
+from typing import Any
 import sys
 
 
@@ -82,26 +83,24 @@ class DucoPy:
         )
         logger.info("DucoPy logging configured with level: {}", level)
 
-    def raw_post(self, endpoint: str, data: str | None = None) -> dict:
+    def raw_post(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
         """Perform a raw POST request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
-            data (dict, optional): The data to include in the request body. Defaults to None.
-            params (dict, optional): Query parameters to include in the request. Defaults to None.
+            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically. Defaults to None.
 
         Returns:
             dict: JSON response from the server.
         """
         return self.client.raw_post(endpoint=endpoint, data=data)
 
-    def raw_patch(self, endpoint: str, data: str | None = None) -> dict:
+    def raw_patch(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
         """Perform a raw PATCH request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
-            data (dict, optional): The data to include in the request body. Defaults to None.
-            params (dict, optional): Query parameters to include in the request. Defaults to None.
+            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically. Defaults to None.
 
         Returns:
             dict: JSON response from the server.

@@ -705,7 +705,7 @@ class APIClient:
         logger.debug("Received response for raw GET request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_post(self, endpoint: str, data: str | None = None) -> dict:
+    def raw_post(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
         """
         Perform a raw POST request to the specified endpoint with retry logic.
         
@@ -714,8 +714,7 @@ class APIClient:
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
-            data (dict, optional): The data to include in the request body.
-            params (dict, optional): Query parameters to include in the request.
+            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically.
 
         Returns:
             dict: JSON response from the server.
@@ -729,7 +728,7 @@ class APIClient:
         logger.debug("Received response for raw POST request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_patch(self, endpoint: str, data: str | None = None) -> dict:
+    def raw_patch(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
         """
         Perform a raw PATCH request to the specified endpoint with retry logic.
         
@@ -738,8 +737,7 @@ class APIClient:
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
-            data (dict, optional): The data to include in the request body.
-            params (dict, optional): Query parameters to include in the request.
+            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically.
 
         Returns:
             dict: JSON response from the server.
@@ -748,7 +746,7 @@ class APIClient:
         mapped_endpoint = self._map_endpoint(endpoint)
         
         logger.info(f"Performing raw PATCH request to endpoint: {mapped_endpoint} with data: {data}")
-        response = self.session.patch(mapped_endpoint, data=data)
+        response = self.session.patch(mapped_endpoint, json=data)
         response.raise_for_status()
         logger.debug(f"Received response for raw PATCH request to endpoint: {mapped_endpoint}")
         return response.json()
@@ -761,15 +759,28 @@ class APIClient:
         For Communication and Print Board: GET to /nodesetoperstate?node={node_id}&value={value}
 
         Args:
-            action (str): The action key (Connectivity Board only, ignored for Communication and Print Board).
+            action (str): The action key. For Communication and Print Board, only "OperState" is supported.
             value (str): The value/state to set (e.g., 'AUTO', 'AUT1', 'MAN1', etc.).
             node_id (int): The ID of the node to perform the action on.
 
         Returns:
             ActionsChangeResponse: Response indicating success or failure.
+            
+        Raises:
+            NotImplementedError: If an unsupported action is requested on Communication and Print Board.
         """
         # Communication and Print Board uses a simpler GET-based API
         if self.is_legacy_api:
+            # Legacy boards only support setting the operation state
+            # Validate that the action is one we can handle
+            supported_actions = {"OperState", "SetVentilationState"}
+            if action not in supported_actions:
+                raise NotImplementedError(
+                    f"Action '{action}' is not supported on Communication and Print Board. "
+                    f"Only operation state changes are supported (supported actions: {supported_actions}). "
+                    f"Please use action='OperState' or upgrade to a Connectivity Board for full action support."
+                )
+            
             endpoint = "/nodesetoperstate"
             logger.info("Setting node {} operation state to {} (Communication and Print Board)", node_id, value)
             

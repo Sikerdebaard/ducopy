@@ -199,14 +199,14 @@ def raw_patch(
     try:
         # Parse the data JSON strings
         # This ensures that we are sending valid JSON
-        request_data = json.loads(data)  # noqa: F841
+        request_data = json.loads(data)
     except json.JSONDecodeError:
         typer.echo("Invalid JSON string for request data or query parameters.")
         raise typer.Exit(code=1)
 
     facade = DucoPy(base_url)
     try:
-        response = facade.raw_patch(endpoint, data=data)
+        response = facade.raw_patch(endpoint, data=request_data)
         print_output(response, format)
     except Exception as e:
         logger.error("Error performing raw PATCH request: {}", str(e))
@@ -218,7 +218,7 @@ def raw_patch(
 def change_action_node(
     base_url: str,
     node_id: int,
-    action: Annotated[str, typer.Option(help="The action key (Connectivity Board only, use any value for Communication and Print Board)")],
+    action: Annotated[str, typer.Option(help="The action key (e.g., 'OperState' for legacy boards, 'SetVentilationState' for modern boards)")],
     value: Annotated[str, typer.Option(help="The state/value to set (e.g., AUTO, MAN1, AUT1)")],
     format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
 ) -> None:
@@ -227,11 +227,12 @@ def change_action_node(
     
     - Connectivity Board: Sends a POST request with JSON body to /action/nodes/{node_id}
     - Communication and Print Board: Sends a GET request to /nodesetoperstate?node={node_id}&value={value}
+      Only supports 'OperState' or 'SetVentilationState' actions on legacy boards.
 
     Args:
         base_url (str): The base URL of the API.
         node_id (int): The ID of the node to perform the action on.
-        action (str): The action key (used only for Connectivity Board validation).
+        action (str): The action key (validated against supported actions for the board type).
         value (str): The state/value to set (e.g., AUTO, MAN1, AUT1, MAN2, AUT2, etc.).
         format (str): Output format: pretty or json.
     """
