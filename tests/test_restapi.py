@@ -1,5 +1,6 @@
 import os
 import pytest
+import requests.exceptions
 from ducopy.rest.client import APIClient
 from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse, ActionsChangeResponse
 
@@ -23,9 +24,9 @@ def client() -> APIClient:
         try:
             client = APIClient(base_url=https_url, verify=True)
             # Test connection by attempting to detect generation
-            _ = client._generation
-        except Exception:
-            # HTTPS failed, fallback to HTTP for Communication and Print Board
+            _ = client.generation
+        except (requests.exceptions.ConnectionError, requests.exceptions.SSLError, ConnectionError):
+            # HTTPS failed due to connection/SSL issues, fallback to HTTP for Communication and Print Board
             http_url = f"http://{duco_ip}"
             client = APIClient(base_url=http_url, verify=True)
     
@@ -52,9 +53,9 @@ def client_insecure() -> APIClient:
         try:
             client = APIClient(base_url=https_url, verify=False)
             # Test connection by attempting to detect generation
-            _ = client._generation
-        except Exception:
-            # HTTPS failed, fallback to HTTP for Communication and Print Board
+            _ = client.generation
+        except (requests.exceptions.ConnectionError, requests.exceptions.SSLError, ConnectionError):
+            # HTTPS failed due to connection/SSL issues, fallback to HTTP for Communication and Print Board
             http_url = f"http://{duco_ip}"
             client = APIClient(base_url=http_url, verify=False)
     
