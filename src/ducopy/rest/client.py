@@ -756,7 +756,7 @@ class APIClient:
         logger.debug("Received response for raw GET request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
+    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
         """
         Perform a raw POST request to the specified endpoint with retry logic.
         
@@ -767,7 +767,9 @@ class APIClient:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
             data (str | dict | list, optional): The data to include in the request body. 
                 If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
-                If str, will be passed through unchanged (assumed to be pre-serialized JSON or other content).
+                If str, will be passed through unchanged.
+            content_type (str | None, optional): Content-Type header value. Defaults to "application/json".
+                Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
             dict: JSON response from the server.
@@ -785,13 +787,13 @@ class APIClient:
         else:
             serialized_data = None
         
-        headers = {"Content-Type": "application/json"} if serialized_data is not None else None
+        headers = {"Content-Type": content_type} if content_type is not None and serialized_data is not None else None
         response = self.session.post(mapped_endpoint, data=serialized_data, headers=headers)
         response.raise_for_status()
         logger.debug("Received response for raw POST request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
+    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
         """
         Perform a raw PATCH request to the specified endpoint with retry logic.
         
@@ -802,7 +804,9 @@ class APIClient:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
             data (str | dict | list, optional): The data to include in the request body. 
                 If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
-                If str, will be passed through unchanged (assumed to be pre-serialized JSON or other content).
+                If str, will be passed through unchanged.
+            content_type (str | None, optional): Content-Type header value. Defaults to "application/json".
+                Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
             dict: JSON response from the server.
@@ -815,14 +819,12 @@ class APIClient:
         # Only serialize if data is dict or list; pass through strings unchanged for backwards compatibility
         if isinstance(data, (dict, list)):
             serialized_data = json.dumps(data, separators=(",", ":"))
-            headers = {"Content-Type": "application/json"}
         elif isinstance(data, str):
             serialized_data = data
-            headers = None
         else:
             serialized_data = None
-            headers = None
         
+        headers = {"Content-Type": content_type} if content_type is not None and serialized_data is not None else None
         response = self.session.patch(mapped_endpoint, data=serialized_data, headers=headers)
         response.raise_for_status()
         logger.debug(f"Received response for raw PATCH request to endpoint: {mapped_endpoint}")

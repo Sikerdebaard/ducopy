@@ -998,3 +998,91 @@ def test_detect_generation_ssl_error_with_https() -> None:
         assert "http://" in error_message.lower()
         assert "https://" in error_message.lower()
         assert "Communication and Print Board" in error_message
+
+
+def test_raw_post_default_content_type(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that raw_post sets Content-Type: application/json by default."""
+    # Mock /info endpoint for API key generation
+    with open("tests/test_data/api_info.json") as f:
+        api_info = json.load(f)
+    mock_requests.get(f"{client.base_url}/info", json=api_info)
+    
+    mock_requests.post(
+        f"{client.base_url}/test",
+        json={"result": "success"}
+    )
+    
+    # Call with dict data (no explicit content_type)
+    client.raw_post("/test", data={"key": "value"})
+    
+    # Get the POST request (last request should be the POST, not the /info GET)
+    post_request = [req for req in mock_requests.request_history if req.method == "POST"][0]
+    
+    # Verify Content-Type was set to application/json
+    assert post_request.headers["Content-Type"] == "application/json"
+
+
+def test_raw_post_custom_content_type(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that raw_post allows custom Content-Type header."""
+    # Mock /info endpoint for API key generation
+    with open("tests/test_data/api_info.json") as f:
+        api_info = json.load(f)
+    mock_requests.get(f"{client.base_url}/info", json=api_info)
+    
+    mock_requests.post(
+        f"{client.base_url}/test",
+        json={"result": "success"}
+    )
+    
+    # Call with string data and custom content type
+    client.raw_post("/test", data="plain text content", content_type="text/plain")
+    
+    # Get the POST request (last request should be the POST, not the /info GET)
+    post_request = [req for req in mock_requests.request_history if req.method == "POST"][0]
+    
+    # Verify Content-Type was set to text/plain
+    assert post_request.headers["Content-Type"] == "text/plain"
+
+
+def test_raw_post_no_content_type(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that raw_post can omit Content-Type header when set to None."""
+    # Mock /info endpoint for API key generation
+    with open("tests/test_data/api_info.json") as f:
+        api_info = json.load(f)
+    mock_requests.get(f"{client.base_url}/info", json=api_info)
+    
+    mock_requests.post(
+        f"{client.base_url}/test",
+        json={"result": "success"}
+    )
+    
+    # Call with string data and no content type
+    client.raw_post("/test", data="raw content", content_type=None)
+    
+    # Get the POST request (last request should be the POST, not the /info GET)
+    post_request = [req for req in mock_requests.request_history if req.method == "POST"][0]
+    
+    # Verify Content-Type header was not set
+    assert "Content-Type" not in post_request.headers
+
+
+def test_raw_patch_custom_content_type(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that raw_patch allows custom Content-Type header."""
+    # Mock /info endpoint for API key generation
+    with open("tests/test_data/api_info.json") as f:
+        api_info = json.load(f)
+    mock_requests.get(f"{client.base_url}/info", json=api_info)
+    
+    mock_requests.patch(
+        f"{client.base_url}/test",
+        json={"result": "success"}
+    )
+    
+    # Call with string data and custom content type
+    client.raw_patch("/test", data="<xml>content</xml>", content_type="application/xml")
+    
+    # Get the PATCH request (last request should be the PATCH, not the /info GET)
+    patch_request = [req for req in mock_requests.request_history if req.method == "PATCH"][0]
+    
+    # Verify Content-Type was set to application/xml
+    assert patch_request.headers["Content-Type"] == "application/xml"

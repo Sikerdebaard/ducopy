@@ -83,7 +83,7 @@ class DucoPy:
         )
         logger.info("DucoPy logging configured with level: {}", level)
 
-    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
+    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
         """Perform a raw POST request to the specified endpoint.
 
         Args:
@@ -91,13 +91,15 @@ class DucoPy:
             data (str | dict | list, optional): The data to include in the request body. 
                 If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
                 If str, will be passed through unchanged. Defaults to None.
+            content_type (str | None, optional): Content-Type header value. Defaults to "application/json".
+                Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
             dict: JSON response from the server.
         """
-        return self.client.raw_post(endpoint=endpoint, data=data)
+        return self.client.raw_post(endpoint=endpoint, data=data, content_type=content_type)
 
-    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
+    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
         """Perform a raw PATCH request to the specified endpoint.
 
         Args:
@@ -105,11 +107,13 @@ class DucoPy:
             data (str | dict | list, optional): The data to include in the request body. 
                 If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
                 If str, will be passed through unchanged. Defaults to None.
+            content_type (str | None, optional): Content-Type header value. Defaults to "application/json".
+                Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
             dict: JSON response from the server.
         """
-        return self.client.raw_patch(endpoint=endpoint, data=data)
+        return self.client.raw_patch(endpoint=endpoint, data=data, content_type=content_type)
 
     def raw_get(self, endpoint: str, params: dict = None) -> dict:
         """Perform a raw GET request to the specified endpoint.
