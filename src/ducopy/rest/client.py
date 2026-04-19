@@ -815,12 +815,14 @@ class APIClient:
         # Only serialize if data is dict or list; pass through strings unchanged for backwards compatibility
         if isinstance(data, (dict, list)):
             serialized_data = json.dumps(data, separators=(",", ":"))
+            headers = {"Content-Type": "application/json"}
         elif isinstance(data, str):
             serialized_data = data
+            headers = None
         else:
             serialized_data = None
+            headers = None
         
-        headers = {"Content-Type": "application/json"} if serialized_data is not None else None
         response = self.session.patch(mapped_endpoint, data=serialized_data, headers=headers)
         response.raise_for_status()
         logger.debug(f"Received response for raw PATCH request to endpoint: {mapped_endpoint}")
