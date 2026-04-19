@@ -69,14 +69,14 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
 
 
 class DucoUrlSession(requests.Session):
-    def __init__(self, base_url: str, verify: bool | str = True, endpoint_mapper: callable = None, timeout: int = 10) -> None:
+    def __init__(self, base_url: str, verify: bool | str = True, endpoint_mapper: Callable[[str], str] | None = None, timeout: int = 10) -> None:
         """
         Initializes the BaseUrlSession with a base URL and optional SSL verification setting.
 
         Args:
             base_url (str): The base URL to prepend to relative URLs.
             verify (bool | str): Path to the certificate or a boolean indicating SSL verification.
-            endpoint_mapper (callable): Optional function to map endpoints for API generation compatibility.
+            endpoint_mapper (Callable[[str], str] | None): Optional function to map endpoints for API generation compatibility.
             timeout (int): Request timeout in seconds. Defaults to 10 seconds.
         """
         super().__init__()
@@ -103,7 +103,7 @@ class DucoUrlSession(requests.Session):
         self.api_key: str | None = None
         self.api_key_timestamp: float = 0.0
         self.api_key_cache_duration: int = 60
-        self.endpoint_mapper: callable | None = endpoint_mapper
+        self.endpoint_mapper: Callable[[str], str] | None = endpoint_mapper
 
         logger.info("Initialized DucoUrlSession for base URL: {}", base_url)
 

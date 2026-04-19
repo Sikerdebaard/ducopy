@@ -16,11 +16,19 @@ def client() -> APIClient:
     # Otherwise, try HTTPS first (for Connectivity Board), fallback to HTTP (for Communication Board)
     if duco_ip.startswith("http://") or duco_ip.startswith("https://"):
         base_url = duco_ip
+        client = APIClient(base_url=base_url, verify=True)
     else:
-        # Default to HTTPS for Connectivity Board
-        base_url = f"https://{duco_ip}"
+        # Try HTTPS first for Connectivity Board
+        https_url = f"https://{duco_ip}"
+        try:
+            client = APIClient(base_url=https_url, verify=True)
+            # Test connection by attempting to detect generation
+            _ = client._generation
+        except Exception:
+            # HTTPS failed, fallback to HTTP for Communication and Print Board
+            http_url = f"http://{duco_ip}"
+            client = APIClient(base_url=http_url, verify=True)
     
-    client = APIClient(base_url=base_url, verify=True)  # SSL verification enabled
     yield client
     client.close()
 
@@ -37,11 +45,19 @@ def client_insecure() -> APIClient:
     # Otherwise, try HTTPS first (for Connectivity Board), fallback to HTTP (for Communication Board)
     if duco_ip.startswith("http://") or duco_ip.startswith("https://"):
         base_url = duco_ip
+        client = APIClient(base_url=base_url, verify=False)
     else:
-        # Default to HTTPS for Connectivity Board
-        base_url = f"https://{duco_ip}"
+        # Try HTTPS first for Connectivity Board
+        https_url = f"https://{duco_ip}"
+        try:
+            client = APIClient(base_url=https_url, verify=False)
+            # Test connection by attempting to detect generation
+            _ = client._generation
+        except Exception:
+            # HTTPS failed, fallback to HTTP for Communication and Print Board
+            http_url = f"http://{duco_ip}"
+            client = APIClient(base_url=http_url, verify=False)
     
-    client = APIClient(base_url=base_url, verify=False)  # SSL verification disabled
     yield client
     client.close()
 

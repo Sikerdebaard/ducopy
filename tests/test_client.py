@@ -377,15 +377,24 @@ def test_get_nodes_legacy_partial_failure(client: APIClient, mock_requests: requ
     
     mock_requests.get(f"{BASE_URL}/nodeinfoget", json=node_info_callback)
     
-    # Should succeed with 2 nodes (1 and 3)
+    # Should succeed with 3 nodes (1, 2 with placeholder, and 3)
+    # New behavior: maintains expected node count with placeholder for failed nodes
     response = client.get_nodes()
     assert isinstance(response, NodesInfoResponse)
-    assert len(response.Nodes) == 2
-    # Verify we got nodes 1 and 3, not node 2
+    assert len(response.Nodes) == 3
+    # Verify we got all node IDs from nodelist
     node_ids = [node.Node for node in response.Nodes]
     assert 1 in node_ids
+    assert 2 in node_ids
     assert 3 in node_ids
-    assert 2 not in node_ids
+    # Verify node 2 is a placeholder with ERROR_FETCH_FAILED type
+    node_2 = next(node for node in response.Nodes if node.Node == 2)
+    assert node_2.General.Type.Val == "ERROR_FETCH_FAILED"
+    # Verify nodes 1 and 3 have valid data
+    node_1 = next(node for node in response.Nodes if node.Node == 1)
+    node_3 = next(node for node in response.Nodes if node.Node == 3)
+    assert node_1.General.Type.Val == "VLVRH"
+    assert node_3.General.Type.Val == "VLVRH"
 
 
 def test_get_info_legacy(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
@@ -446,3 +455,227 @@ def test_normalize_node_structure(client: APIClient, mock_requests: requests_moc
     # General should be normalized to a dict
     assert response.General is not None
     assert isinstance(response.General.dict(), dict)
+
+
+# Tests for get_board_info()
+
+
+def test_get_board_info_modern(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_board_info on Connectivity Board (modern API)."""
+    mock_detection_endpoint_modern(mock_requests)
+    client._generation = "modern"
+    client._board_type = "Connectivity Board"
+    
+    # Mock the /info endpoint response
+    mock_data = load_mock_data("board_info_modern.json")
+    mock_requests.get(f"{BASE_URL}/info", json=mock_data)
+    
+    board_info = client.get_board_info()
+    
+    # Verify the normalized output schema
+    assert isinstance(board_info, dict)
+    assert "Mac" in board_info
+    assert "Serial" in board_info
+    assert "SwVersion" in board_info
+    assert "Uptime" in board_info
+    
+    # Verify the values match expected data
+    assert board_info["Mac"] == "AA:BB:CC:DD:EE:FF"
+    assert board_info["Serial"] == "CONN12345678"
+    assert board_info["SwVersion"] == "2.0.6.0"
+    assert board_info["Uptime"] is None  # Modern boards don't return uptime
+
+
+def test_get_board_info_legacy_with_cached_info(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_board_info on Communication/Print Board with cached device info."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Pre-cache device info to simulate already initialized client
+    client._mac_address = "00:08:5f:35:a8:0f"
+    client._board_serial = "PRSN21401066"
+    client._board_uptime = 2452
+    client._device_info_cached = True
+    
+    # Mock the /nodelist endpoint for BOX node lookup
+    mock_data = load_mock_data("nodes_legacy_with_box.json")
+    mock_requests.get(f"{BASE_URL}/nodelist", json=mock_data)
+    
+    board_info = client.get_board_info()
+    
+    # Verify the normalized output schema
+    assert isinstance(board_info, dict)
+    assert "Mac" in board_info
+    assert "Serial" in board_info
+    assert "SwVersion" in board_info
+    assert "Uptime" in board_info
+    
+    # Verify the values match cached data and BOX node
+    assert board_info["Mac"] == "00:08:5f:35:a8:0f"
+    assert board_info["Serial"] == "PRSN21401066"
+    assert board_info["SwVersion"] == "16036.13.4.0"
+    assert board_info["Uptime"] == 2452
+
+
+def test_get_board_info_legacy_without_cached_info(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_board_info on Communication/Print Board without cached device info."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # No cached info
+    client._device_info_cached = False
+    
+    # Mock the /boardinfo endpoint for device info caching
+    boardinfo_data = load_mock_data("board_info_legacy.json")
+    mock_requests.get(f"{BASE_URL}/boardinfo", json=boardinfo_data)
+    
+    # Mock the /nodelist endpoint for BOX node lookup
+    nodes_data = load_mock_data("nodes_legacy_with_box.json")
+    mock_requests.get(f"{BASE_URL}/nodelist", json=nodes_data)
+    
+    board_info = client.get_board_info()
+    
+    # Verify the normalized output schema
+    assert isinstance(board_info, dict)
+    assert "Mac" in board_info
+    assert "Serial" in board_info
+    assert "SwVersion" in board_info
+    assert "Uptime" in board_info
+    
+    # Verify the values match /boardinfo and BOX node
+    assert board_info["Mac"] == "00:08:5f:35:a8:0f"
+    assert board_info["Serial"] == "PRSN21401066"
+    assert board_info["SwVersion"] == "16036.13.4.0"
+    assert board_info["Uptime"] == 2452
+    
+    # Verify device info was cached
+    assert client._device_info_cached is True
+    assert client._mac_address == "00:08:5f:35:a8:0f"
+    assert client._board_serial == "PRSN21401066"
+
+
+def test_get_board_info_legacy_no_box_node(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_board_info on Communication/Print Board when BOX node is not found."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Pre-cache device info
+    client._mac_address = "00:08:5f:35:a8:0f"
+    client._board_serial = "PRSN21401066"
+    client._board_uptime = 2452
+    client._device_info_cached = True
+    
+    # Mock the /nodelist endpoint without BOX node
+    mock_data = {
+        "Nodes": [
+            {
+                "Node": 2,
+                "General": {
+                    "Type": {"Val": "SENSOR"},
+                    "Addr": 2,
+                    "SwVersion": {"Val": "16036.13.4.0"}
+                }
+            }
+        ]
+    }
+    mock_requests.get(f"{BASE_URL}/nodelist", json=mock_data)
+    
+    board_info = client.get_board_info()
+    
+    # Verify the normalized output schema
+    assert isinstance(board_info, dict)
+    assert "Mac" in board_info
+    assert "Serial" in board_info
+    assert "SwVersion" in board_info
+    assert "Uptime" in board_info
+    
+    # Verify MAC and Serial are present but SwVersion is None
+    assert board_info["Mac"] == "00:08:5f:35:a8:0f"
+    assert board_info["Serial"] == "PRSN21401066"
+    assert board_info["SwVersion"] is None  # BOX node not found
+    assert board_info["Uptime"] == 2452
+
+
+def test_get_board_info_legacy_nodes_fetch_fails(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_board_info on Communication/Print Board when fetching nodes fails."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Pre-cache device info
+    client._mac_address = "00:08:5f:35:a8:0f"
+    client._board_serial = "PRSN21401066"
+    client._board_uptime = 2452
+    client._device_info_cached = True
+    
+    # Mock the /nodelist endpoint to fail
+    mock_requests.get(f"{BASE_URL}/nodelist", status_code=500)
+    
+    board_info = client.get_board_info()
+    
+    # Verify the normalized output schema
+    assert isinstance(board_info, dict)
+    assert "Mac" in board_info
+    assert "Serial" in board_info
+    assert "SwVersion" in board_info
+    assert "Uptime" in board_info
+    
+    # Verify MAC and Serial are present but SwVersion is None due to failure
+    assert board_info["Mac"] == "00:08:5f:35:a8:0f"
+    assert board_info["Serial"] == "PRSN21401066"
+    assert board_info["SwVersion"] is None  # Failed to fetch nodes
+    assert board_info["Uptime"] == 2452
+
+
+def test_nodes_response_never_none(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that NodesInfoResponse.Nodes is never None, always a list (possibly empty)."""
+    mock_detection_endpoint_modern(mock_requests)
+    client._generation = "modern"
+    client._board_type = "Connectivity Board"
+    
+    # Mock an empty nodes response
+    mock_requests.get(f"{BASE_URL}/info/nodes", json={"Nodes": []})
+    
+    response = client.get_nodes()
+    
+    # Verify Nodes is a list, not None
+    assert isinstance(response, NodesInfoResponse)
+    assert response.Nodes is not None
+    assert isinstance(response.Nodes, list)
+    assert len(response.Nodes) == 0
+
+def test_serialized_nodes_never_none(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that individual nodes in serialized response are never None."""
+    mock_detection_endpoint_modern(mock_requests)
+    client._generation = "modern"
+    client._board_type = "Connectivity Board"
+    
+    # Mock a response with actual nodes
+    mock_data = load_mock_data("nodes.json")
+    mock_requests.get(f"{BASE_URL}/info/nodes", json=mock_data)
+    
+    response = client.get_nodes()
+    
+    # Serialize to dict (simulating what Home Assistant might do)
+    try:
+        # Pydantic v2
+        response_dict = response.model_dump()
+    except AttributeError:
+        # Pydantic v1
+        response_dict = response.dict()
+    
+    # Verify no None values in Nodes list
+    assert "Nodes" in response_dict
+    assert isinstance(response_dict["Nodes"], list)
+    assert len(response_dict["Nodes"]) > 0
+    
+    # Check that each node in the serialized list is a dict, not None
+    for i, node in enumerate(response_dict["Nodes"]):
+        assert node is not None, f"Node at index {i} is None in serialized response"
+        assert isinstance(node, dict), f"Node at index {i} is not a dict: {type(node)}"
+        # Verify critical fields exist
+        assert "Node" in node, f"Node at index {i} missing 'Node' field"
+        assert "General" in node, f"Node at index {i} missing 'General' field"

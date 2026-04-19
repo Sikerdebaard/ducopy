@@ -37,6 +37,8 @@ from pydantic import HttpUrl
 from ducopy.rest.models import (
     ActionsResponse,
     NodeInfo,
+    NodeGeneralInfo,
+    GeneralInfo,
     NodesResponse,
     ConfigNodeResponse,
     ConfigNodeRequest,
@@ -538,34 +540,39 @@ class APIClient:
         Connectivity Board format:
         {"Node": 4, "General": {"Type": {"Val": "..."}, "Addr": 0}, "Ventilation": {...}, ...}
         """
-        # Network-related fields that should go to NetworkDuco
-        network_fields = {
-            "subtype": "Subtype",
-            "sub": "Sub",
-            "prnt": "Prnt",
-            "asso": "Asso",
-            "rssi_n2m": "RssiN2M",
-            "hop_via": "HopVia",
-            "rssi_n2h": "RssiN2H",
-            "show": "Show",
-            "link": "Link",
-        }
         
         # Extract all sensor fields (co2, temp, rh, etc.) - exclude snsr as it's metadata
         # Wrap values in {"Val": value} format to match Connectivity Board structure
         sensor_fields = {}
-        # Map lowercase keys to proper capitalized names
-        sensor_key_mapping = {
+        
+        # Explicit allowlist of all known sensor field names
+        # Maps legacy/variant field names to their canonical modern format
+        # Based on DUCO API specs and observed field names from both board types
+        sensor_field_allowlist = {
+            # CO2 sensor variants
             "co2": "Co2",
+            "CO2": "Co2",
+            "iaqco2": "IaqCo2",
+            "IaqCo2": "IaqCo2",
+            
+            # Temperature sensor variants
             "temp": "Temp",
-            "rh": "Rh"
+            "Temp": "Temp",
+            
+            # Humidity/RH sensor variants
+            "rh": "Rh",
+            "RH": "Rh",
+            "iaqrh": "IaqRh",
+            "IaqRh": "IaqRh",
+            "humidity": "Rh",
+            "Humidity": "Rh",
         }
-        known_sensor_keys = ["co2", "temp", "rh", "CO2", "Temp", "RH"]
-        for key in known_sensor_keys:
+        
+        # Extract only fields that are in the allowlist
+        for key in sensor_field_allowlist.keys():
             if key in gen1_data:
-                normalized_key = key.lower()
-                proper_key = sensor_key_mapping.get(normalized_key, normalized_key.capitalize())
-                sensor_fields[proper_key] = {"Val": gen1_data[key]}
+                canonical_name = sensor_field_allowlist[key]
+                sensor_fields[canonical_name] = {"Val": gen1_data[key]}
         
         # Extract energy and fan info from nested structures (Communication/Print board)
         energy_info = gen1_data.get("EnergyInfo", {})
@@ -603,16 +610,6 @@ class APIClient:
         hr_bypass = {}
         if "BypassStatus" in energy_info:
             hr_bypass["Pos"] = {"Val": energy_info["BypassStatus"]}
-        
-        # Also check for any other potential sensor fields by looking for numeric values
-        # that aren't already captured in other sections
-        known_non_sensor_keys = {"node", "devtype", "addr", "state", "ovrl", "cerr", "cntdwn", "endtime", "mode", "trgt", "actl", "snsr", "sw", "swver", "swversion", "serial", "serialboard", "serialnode", "serialnb", "EnergyInfo", "EnergyFan"}
-        known_non_sensor_keys.update(network_fields.keys())  # Exclude network fields
-        for key, value in gen1_data.items():
-            if key not in known_non_sensor_keys and isinstance(value, (int, float)):
-                normalized_key = key.lower()
-                proper_key = sensor_key_mapping.get(normalized_key, normalized_key.capitalize())
-                sensor_fields[proper_key] = {"Val": value}
         
         # Remove zero values from sensor data (check the Val inside the dict)
         sensor_fields = {k: v for k, v in sensor_fields.items() if v.get("Val") != 0 and v.get("Val") != 0.0}
@@ -704,6 +701,9 @@ class APIClient:
     def raw_post(self, endpoint: str, data: str | None = None) -> dict:
         """
         Perform a raw POST request to the specified endpoint with retry logic.
+        
+        Note: Endpoint mapping is applied for legacy board compatibility.
+        Some POST operations may not be supported on Communication and Print Board.
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
@@ -713,15 +713,21 @@ class APIClient:
         Returns:
             dict: JSON response from the server.
         """
-        logger.info(f"Performing raw POST request to endpoint: {endpoint} with data: {data}")
-        response = self.session.post(endpoint, json=data)
+        # Map endpoint if using Communication and Print Board
+        mapped_endpoint = self._map_endpoint(endpoint)
+        
+        logger.info(f"Performing raw POST request to endpoint: {mapped_endpoint} with data: {data}")
+        response = self.session.post(mapped_endpoint, json=data)
         response.raise_for_status()
-        logger.debug("Received response for raw POST request to endpoint: {}", endpoint)
+        logger.debug("Received response for raw POST request to endpoint: {}", mapped_endpoint)
         return response.json()
 
     def raw_patch(self, endpoint: str, data: str | None = None) -> dict:
         """
         Perform a raw PATCH request to the specified endpoint with retry logic.
+        
+        Note: Endpoint mapping is applied for legacy board compatibility.
+        Some PATCH operations may not be supported on Communication and Print Board.
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
@@ -731,10 +737,13 @@ class APIClient:
         Returns:
             dict: JSON response from the server.
         """
-        logger.info(f"Performing raw PATCH request to endpoint: {endpoint} with data: {data}")
-        response = self.session.patch(endpoint, data=data)
+        # Map endpoint if using Communication and Print Board
+        mapped_endpoint = self._map_endpoint(endpoint)
+        
+        logger.info(f"Performing raw PATCH request to endpoint: {mapped_endpoint} with data: {data}")
+        response = self.session.patch(mapped_endpoint, data=data)
         response.raise_for_status()
-        logger.debug(f"Received response for raw PATCH request to endpoint: {endpoint}")
+        logger.debug(f"Received response for raw PATCH request to endpoint: {mapped_endpoint}")
         return response.json()
 
     def post_action_node(self, action: str, value: str, node_id: int) -> ActionsChangeResponse:
@@ -1052,7 +1061,22 @@ class APIClient:
                 except Exception as e:
                     logger.warning("Failed to fetch info for node {}: {}", node_id, e)
                     failed_nodes.append(node_id)
-                    # Continue with other nodes - individual node failures are tolerated
+                    # Create placeholder node to maintain expected node count
+                    # This ensures integrations can still see all node IDs from nodelist
+                    placeholder_node = NodeInfo(
+                        Node=node_id,
+                        General=NodeGeneralInfo(
+                            Type=GeneralInfo(Id=None, Val="ERROR_FETCH_FAILED"),
+                            Addr=None,
+                            SwVersion=None,
+                            SerialBoard=None
+                        ),
+                        NetworkDuco=None,
+                        Ventilation=None,
+                        HeatRecovery=None,
+                        Sensor=None
+                    )
+                    nodes.append(placeholder_node)
             
             # If ALL nodes failed, raise an error - this indicates a systematic problem
             if failed_nodes and len(failed_nodes) == len(node_ids):
@@ -1065,7 +1089,7 @@ class APIClient:
             if failed_nodes:
                 logger.warning(
                     "Successfully fetched {} of {} nodes. Failed nodes: {}", 
-                    len(nodes), len(node_ids), failed_nodes
+                    len(nodes) - len(failed_nodes), len(node_ids), failed_nodes
                 )
             
             data = {"Nodes": nodes}
