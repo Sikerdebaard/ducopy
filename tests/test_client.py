@@ -826,9 +826,26 @@ def test_get_board_info_legacy_swversion_fallback_to_box_node(client: APIClient,
     client._board_uptime = 2452
     client._device_info_cached = True
     
-    # Mock the /nodelist endpoint with BOX node
-    mock_data = load_mock_data("nodes_legacy_with_box.json")
-    mock_requests.get(f"{BASE_URL}/nodelist", json=mock_data)
+    # Mock the legacy /nodelist endpoint to return node ids only.
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": ["BOX"]})
+
+    # Mock the legacy /nodeinfoget lookup used to fetch per-node details.
+    def nodeinfoget_callback(request, context):  # type: ignore[no-untyped-def]
+        query_values = {key.lower(): value for key, value in request.qs.items()}
+        requested_node = None
+        for key in ("node", "nodeid", "nodename", "id", "name"):
+            values = query_values.get(key)
+            if values:
+                requested_node = values[0]
+                break
+
+        assert requested_node == "BOX"
+        return {
+            "Name": "BOX",
+            "SwVersion": "16036.13.4.0",
+        }
+
+    mock_requests.get(f"{BASE_URL}/nodeinfoget", json=nodeinfoget_callback)
     
     board_info = client.get_board_info()
     
