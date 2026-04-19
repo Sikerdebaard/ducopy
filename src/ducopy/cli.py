@@ -92,6 +92,27 @@ def print_output(data: Any, format: str) -> None:  # noqa: ANN401
         console.print(Pretty(data, expand_all=False))
 
 
+def _build_generation_info(facade: DucoPy) -> dict[str, Any]:  # noqa: ANN401
+    """Build generation info dictionary from DucoPy facade instance.
+    
+    This helper ensures consistent generation_info schema across all CLI commands.
+    
+    Args:
+        facade: DucoPy facade instance
+        
+    Returns:
+        dict: Generation information including board type, API versions, and flags
+    """
+    return {
+        "generation": facade.client.generation,
+        "board_type": facade.client.board_type,
+        "api_version": facade.client.api_version,
+        "public_api_version": facade.client.public_api_version,
+        "is_modern_api": facade.client.is_modern_api,
+        "is_legacy_api": facade.client.is_legacy_api,
+    }
+
+
 @app.callback()
 def configure(
     logging_level: Annotated[
@@ -296,14 +317,7 @@ def get_config_nodes(
     facade = DucoPy(base_url)
     try:
         # Get generation info
-        generation_info = {
-            "generation": facade.client.generation,
-            "board_type": facade.client.board_type,
-            "api_version": facade.client.api_version,
-            "public_api_version": facade.client.public_api_version,
-            "is_modern_api": facade.client.is_modern_api,
-            "is_legacy_api": facade.client.is_legacy_api,
-        }
+        generation_info = _build_generation_info(facade)
         
         # Get config data
         config_data = facade.get_config_nodes()
@@ -344,14 +358,7 @@ def get_info(
     facade = DucoPy(base_url)
     
     # Get the generation info
-    generation_info = {
-        "generation": facade.client.generation,
-        "board_type": facade.client.board_type,
-        "api_version": facade.client.api_version,
-        "public_api_version": facade.client.public_api_version,
-        "is_modern_api": facade.client.is_modern_api,
-        "is_legacy_api": facade.client.is_legacy_api,
-    }
+    generation_info = _build_generation_info(facade)
     
     # Get the regular info
     info_data = facade.get_info(module=module, submodule=submodule, parameter=parameter)
@@ -374,14 +381,7 @@ def get_nodes(
     facade = DucoPy(base_url)
     
     # Get generation info
-    generation_info = {
-        "generation": facade.client.generation,
-        "board_type": facade.client.board_type,
-        "api_version": facade.client.api_version,
-        "public_api_version": facade.client.public_api_version,
-        "is_modern_api": facade.client.is_modern_api,
-        "is_legacy_api": facade.client.is_legacy_api,
-    }
+    generation_info = _build_generation_info(facade)
     
     # Get nodes data
     nodes_data = facade.get_nodes()
@@ -404,14 +404,7 @@ def get_node_info(
     facade = DucoPy(base_url)
     
     # Get generation info
-    generation_info = {
-        "generation": facade.client.generation,
-        "board_type": facade.client.board_type,
-        "api_version": facade.client.api_version,
-        "public_api_version": facade.client.public_api_version,
-        "is_modern_api": facade.client.is_modern_api,
-        "is_legacy_api": facade.client.is_legacy_api,
-    }
+    generation_info = _build_generation_info(facade)
     
     # Get node info
     node_data = facade.get_node_info(node_id=node_id)
@@ -434,14 +427,7 @@ def get_config_node(
     facade = DucoPy(base_url)
     
     # Get generation info
-    generation_info = {
-        "generation": facade.client.generation,
-        "board_type": facade.client.board_type,
-        "api_version": facade.client.api_version,
-        "public_api_version": facade.client.public_api_version,
-        "is_modern_api": facade.client.is_modern_api,
-        "is_legacy_api": facade.client.is_legacy_api,
-    }
+    generation_info = _build_generation_info(facade)
     
     # Get config data
     config_data = facade.get_config_node(node_id=node_id)
@@ -466,14 +452,7 @@ def get_action(
     facade = DucoPy(base_url)
     
     # Get generation info
-    generation_info = {
-        "generation": facade.client.generation,
-        "board_type": facade.client.board_type,
-        "api_version": facade.client.api_version,
-        "public_api_version": facade.client.public_api_version,
-        "is_modern_api": facade.client.is_modern_api,
-        "is_legacy_api": facade.client.is_legacy_api,
-    }
+    generation_info = _build_generation_info(facade)
     
     # Get action data
     action_data = facade.get_action(action=action)
@@ -499,14 +478,7 @@ def get_actions_node(
     facade = DucoPy(base_url)
     
     # Get generation info
-    generation_info = {
-        "generation": facade.client.generation,
-        "board_type": facade.client.board_type,
-        "api_version": facade.client.api_version,
-        "public_api_version": facade.client.public_api_version,
-        "is_modern_api": facade.client.is_modern_api,
-        "is_legacy_api": facade.client.is_legacy_api,
-    }
+    generation_info = _build_generation_info(facade)
     
     # Get actions data
     actions_data = facade.get_actions_node(node_id=node_id, action=action)
@@ -538,14 +510,7 @@ def check_generation(
     base_url = validate_url(base_url)
     facade = DucoPy(base_url)
     
-    generation_info = {
-        "generation": facade.client.generation,
-        "board_type": facade.client.board_type,
-        "api_version": facade.client.api_version,
-        "public_api_version": facade.client.public_api_version,
-        "is_modern_api": facade.client.is_modern_api,
-        "is_legacy_api": facade.client.is_legacy_api,
-    }
+    generation_info = _build_generation_info(facade)
     
     print_output(generation_info, format)
 
