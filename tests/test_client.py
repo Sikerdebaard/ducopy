@@ -4,7 +4,7 @@ import requests.exceptions
 import json
 from typing import Any
 from ducopy.rest.client import APIClient
-from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse, ActionsChangeResponse
+from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse, ActionsChangeResponse, NodesResponse
 
 BASE_URL = "http://localhost:5000"
 
@@ -176,6 +176,164 @@ def test_get_config_node(client: APIClient, mock_requests: requests_mock.Mocker)
     response = client.get_config_node(node_id=1)
     assert isinstance(response, ConfigNodeResponse)
     assert response.Node == mock_data["Node"]
+
+
+def test_get_config_nodes_legacy(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_config_nodes on Communication and Print Board - aggregates individual node configs."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Mock nodelist response
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1, 2, 3]})
+    
+    # Mock individual node info responses for get_nodes() call
+    node_info_responses = {
+        1: {"node": 1, "devtype": "VLVRH", "addr": 1, "state": "AUTO", "ovrl": 255, "cerr": 0},
+        2: {"node": 2, "devtype": "VLVRH", "addr": 2, "state": "AUTO", "ovrl": 255, "cerr": 0},
+        3: {"node": 3, "devtype": "VLVRH", "addr": 3, "state": "AUTO", "ovrl": 255, "cerr": 0},
+    }
+
+    def nodeinfoget_callback(request: Any, context: Any) -> dict[str, Any]:  # noqa: ANN401
+        node_values = request.qs.get("node")
+        if not node_values:
+            context.status_code = 400
+            return {"error": "missing node parameter"}
+        node_id = int(node_values[0])
+        return node_info_responses.get(node_id, {})
+
+    mock_requests.get(
+        f"{BASE_URL}/nodeinfoget",
+        additional_matcher=lambda request: "node" in request.qs,
+        json=nodeinfoget_callback,
+    )
+    
+    # Mock individual node config responses (mapped from /config/nodes/{id} to /nodeconfigget?node={id})
+    node_config_responses = {
+        1: {"Node": 1, "SerialBoard": "SERIAL1", "FlowLvlMan1": {"Id": 196614, "Val": 30, "Min": 0, "Max": 50}},
+        2: {"Node": 2, "SerialBoard": "SERIAL2", "FlowLvlMan1": {"Id": 196614, "Val": 40, "Min": 0, "Max": 50}},
+        3: {"Node": 3, "SerialBoard": "SERIAL3", "FlowLvlMan1": {"Id": 196614, "Val": 50, "Min": 0, "Max": 50}},
+    }
+
+    def nodeconfigget_callback(request: Any, context: Any) -> dict[str, Any]:  # noqa: ANN401
+        node_values = request.qs.get("node")
+        if not node_values:
+            context.status_code = 400
+            return {"error": "missing node parameter"}
+        node_id = int(node_values[0])
+        return node_config_responses.get(node_id, {})
+
+    mock_requests.get(
+        f"{BASE_URL}/nodeconfigget",
+        additional_matcher=lambda request: "node" in request.qs,
+        json=nodeconfigget_callback,
+    )
+    
+    # Test the actual method
+    response = client.get_config_nodes()
+    assert isinstance(response, NodesResponse)
+    assert len(response.Nodes) == 3
+    # Verify node IDs match
+    node_ids = [node.Node for node in response.Nodes]
+    assert 1 in node_ids
+    assert 2 in node_ids
+    assert 3 in node_ids
+
+
+def test_get_config_nodes_legacy_all_nodes_fail(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that get_config_nodes raises error when ALL node configs fail on Communication and Print Board."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Mock nodelist response
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1, 2, 3]})
+    
+    # Mock individual node info responses for get_nodes() call
+    node_info_responses = {
+        1: {"node": 1, "devtype": "VLVRH", "addr": 1, "state": "AUTO", "ovrl": 255, "cerr": 0},
+        2: {"node": 2, "devtype": "VLVRH", "addr": 2, "state": "AUTO", "ovrl": 255, "cerr": 0},
+        3: {"node": 3, "devtype": "VLVRH", "addr": 3, "state": "AUTO", "ovrl": 255, "cerr": 0},
+    }
+
+    def nodeinfoget_callback(request: Any, context: Any) -> dict[str, Any]:  # noqa: ANN401
+        node_values = request.qs.get("node")
+        if not node_values:
+            context.status_code = 400
+            return {"error": "missing node parameter"}
+        node_id = int(node_values[0])
+        return node_info_responses.get(node_id, {})
+
+    mock_requests.get(
+        f"{BASE_URL}/nodeinfoget",
+        additional_matcher=lambda request: "node" in request.qs,
+        json=nodeinfoget_callback,
+    )
+    
+    # Mock all node config requests to fail (e.g., 500 error)
+    mock_requests.get(f"{BASE_URL}/nodeconfigget", status_code=500)
+    
+    # Should raise RuntimeError because all node configs failed
+    with pytest.raises(RuntimeError, match="Failed to fetch configuration for all 3 nodes"):
+        client.get_config_nodes()
+
+
+def test_get_config_nodes_legacy_partial_failure(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that get_config_nodes continues when SOME node configs fail on Communication and Print Board."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Mock nodelist response
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1, 2, 3]})
+    
+    # Mock individual node info responses for get_nodes() call
+    node_info_responses = {
+        1: {"node": 1, "devtype": "VLVRH", "addr": 1, "state": "AUTO", "ovrl": 255, "cerr": 0},
+        2: {"node": 2, "devtype": "VLVRH", "addr": 2, "state": "AUTO", "ovrl": 255, "cerr": 0},
+        3: {"node": 3, "devtype": "VLVRH", "addr": 3, "state": "AUTO", "ovrl": 255, "cerr": 0},
+    }
+
+    def nodeinfoget_callback(request: Any, context: Any) -> dict[str, Any]:  # noqa: ANN401
+        node_values = request.qs.get("node")
+        if not node_values:
+            context.status_code = 400
+            return {"error": "missing node parameter"}
+        node_id = int(node_values[0])
+        return node_info_responses.get(node_id, {})
+
+    mock_requests.get(
+        f"{BASE_URL}/nodeinfoget",
+        additional_matcher=lambda request: "node" in request.qs,
+        json=nodeinfoget_callback,
+    )
+    
+    # Mock responses: node 1 and 3 config succeed, node 2 config fails
+    def node_config_callback(request: Any, context: Any) -> dict[str, Any] | str:  # noqa: ANN401
+        params = request.qs
+        node_id = int(params['node'][0]) if 'node' in params else 1
+        
+        if node_id == 2:
+            context.status_code = 500
+            return "Internal Server Error"
+        
+        return {
+            "Node": node_id,
+            "SerialBoard": f"SERIAL{node_id}",
+            "FlowLvlMan1": {"Id": 196614, "Val": 30 * node_id, "Min": 0, "Max": 50}
+        }
+    
+    mock_requests.get(f"{BASE_URL}/nodeconfigget", json=node_config_callback)
+    
+    # Should succeed with 2 nodes (1 and 3), tolerating node 2's failure
+    response = client.get_config_nodes()
+    assert isinstance(response, NodesResponse)
+    assert len(response.Nodes) == 2
+    # Verify we got configs for nodes 1 and 3 only
+    node_ids = [node.Node for node in response.Nodes]
+    assert 1 in node_ids
+    assert 2 not in node_ids  # Node 2 config failed, so it's excluded
+    assert 3 in node_ids
 
 
 # Uncomment this test if needed
@@ -811,4 +969,4 @@ def test_detect_generation_ssl_error_with_https() -> None:
         error_message = str(exc_info.value)
         assert "http://" in error_message.lower()
         assert "https://" in error_message.lower()
-        assert "Communication and Print Board only supports HTTP" in error_message
+        assert "Communication and Print Board" in error_message

@@ -56,12 +56,13 @@ ducopy = DucoPy(base_url=base_url)
 
 # Get nodes (works on all board types)
 nodes = ducopy.get_nodes()
-print(nodes.model_dump(mode='json'))
+# For JSON output, handle both Pydantic v1 and v2
+print(nodes.model_dump(mode='json') if hasattr(nodes, 'model_dump') else nodes.dict())
 
 # Retrieve information for a specific node (works on all board types)
 node_id = 1
 node_info = ducopy.get_node_info(node_id=node_id)
-print(node_info.model_dump(mode='json'))
+print(node_info.model_dump(mode='json') if hasattr(node_info, 'model_dump') else node_info.dict())
 
 # Get API information (Connectivity Board only)
 # For Communication/Print Board, this will raise NotImplementedError
@@ -91,7 +92,7 @@ Here is a list of the main methods available in the `DucoPy` facade:
 - `get_logs() -> dict`: Retrieve the system logs from the DucoBox.
 - `update_config_node(node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse`: Update node configuration.
 
-All methods return a dictionary or a Pydantic model instance. For JSON-serializable output from Pydantic models, use `.model_dump(mode='json')` with Pydantic v2 or `.dict()` with Pydantic v1.
+All methods return a dictionary or a Pydantic model instance. For JSON-serializable output from Pydantic models, use the version-compatible pattern shown in the examples above: `obj.model_dump(mode='json') if hasattr(obj, 'model_dump') else obj.dict()`. Alternatively, use the CLI which handles both Pydantic v1 and v2 automatically.
 
 ## Using the CLI Client
 
