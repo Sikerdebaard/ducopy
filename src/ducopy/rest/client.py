@@ -1104,6 +1104,15 @@ class APIClient:
             # Transform each node in the Connectivity Board response
             transformed_nodes = []
             for node in data["Nodes"]:
+                if node is None:
+                    logger.warning("Skipping null node entry in modern nodes response")
+                    continue
+                if not isinstance(node, dict):
+                    logger.warning(
+                        "Skipping invalid node entry in modern nodes response: expected dict, got {}",
+                        type(node).__name__,
+                    )
+                    continue
                 transformed_node = self._transform_modern_node_info(node)
                 transformed_nodes.append(transformed_node)
             data["Nodes"] = transformed_nodes
