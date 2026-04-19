@@ -64,12 +64,16 @@ def client_insecure() -> APIClient:
 
 def test_get_api_info(client: APIClient) -> None:
     """Test fetching API info with SSL verification."""
+    if client.is_legacy_api:
+        pytest.skip("API info endpoint (/api) is not available on Communication and Print Board (legacy API)")
     api_info = client.get_api_info()
     assert isinstance(api_info, dict), "API info response should be a dictionary"
 
 
 def test_get_api_info_insecure(client_insecure: APIClient) -> None:
     """Test fetching API info without SSL verification."""
+    if client_insecure.is_legacy_api:
+        pytest.skip("API info endpoint (/api) is not available on Communication and Print Board (legacy API)")
     api_info = client_insecure.get_api_info()
     assert isinstance(api_info, dict), "API info response should be a dictionary"
 

@@ -315,6 +315,10 @@ class VentilationInfo(BaseModel):
     FlowLvl: int | None = None
     Fan: VentilationFanInfo | None = None
     Sensor: VentilationSensorInfo | None = None
+    # Calibration fields (from Connectivity Board Ventilation.Calibration section)
+    CalibIsValid: bool | None = None
+    CalibState: str | None = None
+    CalibError: int | None = None
 
     @unified_validator()
     def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:

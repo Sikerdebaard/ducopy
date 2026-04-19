@@ -93,6 +93,8 @@ class APIClient:
         # Device identification cache (board-agnostic)
         self._mac_address = None
         self._board_serial = None
+        self._board_swversion = None
+        self._board_uptime = None
         self._device_info_cached = False
         
         logger.info("APIClient initialized with base URL: {}", base_url)
@@ -174,31 +176,31 @@ class APIClient:
             response.raise_for_status()
             response.json()
             
-            # If we got here, /info exists
-            if is_https:
-                # HTTPS + /info exists = Connectivity Board (modern API)
-                self._generation = "modern"
-                self._board_type = "Connectivity Board"
-                logger.info("Detected Connectivity Board (modern API) - HTTPS with /info endpoint")
-            else:
-                # HTTP + /info exists - this indicates Connectivity Board (modern API)
-                # The /info endpoint is the key characteristic of Connectivity Boards (V1 and V2 hardware variants)
-                logger.debug("Got /info on HTTP, fetching version info...")
-                try:
-                    api_response = self.session.request("GET", "/api", ensure_apikey=False)
-                    api_response.raise_for_status()
-                    api_info = api_response.json()
-                    
-                    self._api_version = api_info.get("ApiVersion", {}).get("Val")
-                    self._public_api_version = api_info.get("PublicApiVersion", {}).get("Val")
-                except Exception:
-                    # /api endpoint may not be available or may error
-                    logger.debug("Could not fetch /api endpoint, but /info exists")
+            # If we got here, /info exists - this indicates Connectivity Board (modern API)
+            # The /info endpoint is the key characteristic of Connectivity Boards (V1 and V2 hardware variants)
+            self._generation = "modern"
+            self._board_type = "Connectivity Board"
+            
+            # Fetch /api endpoint to populate version information
+            # For HTTPS, we need to ensure API key is available first
+            logger.debug("Fetching version info from /api endpoint...")
+            try:
+                # Generate API key if needed (required for /api on Connectivity Board)
+                self.session._ensure_apikey()
                 
-                # If /info endpoint exists and returns data, classify as Connectivity Board (modern)
-                # This applies to both V1 and V2 Connectivity Board hardware variants
-                self._generation = "modern"
-                self._board_type = "Connectivity Board"
+                api_response = self.session.request("GET", "/api", ensure_apikey=False)
+                api_response.raise_for_status()
+                api_info = api_response.json()
+                
+                self._api_version = api_info.get("ApiVersion", {}).get("Val")
+                self._public_api_version = api_info.get("PublicApiVersion", {}).get("Val")
+                
+                logger.debug("API versions fetched: ApiVersion={}, PublicApiVersion={}", 
+                           self._api_version, self._public_api_version)
+            except Exception as e:
+                # /api endpoint may not be available or may error
+                # This is not critical - we can still operate without version info
+                logger.debug("Could not fetch /api endpoint ({}), but /info exists - proceeding", e)
             
             logger.info(
                 "API generation detected: {} (Protocol: {}, Board: {})",
@@ -449,10 +451,11 @@ class APIClient:
                     # {"serial": "PRSN21401066", "mac": "00:08:5f:35:a8:0f", "swversion": "16036.13.4.0", "uptime": 2452}
                     self._mac_address = board_data.get("mac")
                     self._board_serial = board_data.get("serial")
+                    self._board_swversion = board_data.get("swversion")
                     self._board_uptime = board_data.get("uptime")
                     
-                    logger.info("Cached device info from Communication/Print Board: MAC={}, Serial={}, Uptime={}", 
-                               self._mac_address, self._board_serial, self._board_uptime)
+                    logger.info("Cached device info from Communication/Print Board: MAC={}, Serial={}, SwVersion={}, Uptime={}", 
+                               self._mac_address, self._board_serial, self._board_swversion, self._board_uptime)
                     
                 except Exception as e:
                     logger.warning("Failed to fetch /boardinfo endpoint: {}. Device info may be incomplete.", e)
@@ -1191,8 +1194,8 @@ class APIClient:
                 # Add network fields to NetworkDuco
                 data["NetworkDuco"].update(network_data)
         
-        # Normalize calibration data: Move Ventilation.Calibration.* to Calibration.Calib*
-        # This ensures consistent access regardless of board type
+        # Normalize calibration data: Move Ventilation.Calibration.* to Ventilation.Calib*
+        # This flattens the nested calibration structure for easier access
         if "Ventilation" in data and isinstance(data["Ventilation"], dict):
             if "Calibration" in data["Ventilation"] and isinstance(data["Ventilation"]["Calibration"], dict):
                 calib_data = data["Ventilation"].pop("Calibration")
@@ -1204,16 +1207,18 @@ class APIClient:
                     "Error": "CalibError"
                 }
                 
-                # Create Calibration section if it doesn't exist
-                if "Calibration" not in data or data["Calibration"] is None:
-                    data["Calibration"] = {}
-                
-                # Move and rename calibration fields
+                # Move and rename calibration fields directly into Ventilation section
+                # Extract Val from the wrapped format if present
                 for api_field, normalized_field in calib_mapping.items():
                     if api_field in calib_data:
-                        data["Calibration"][normalized_field] = calib_data[api_field]
+                        field_value = calib_data[api_field]
+                        # Extract Val if it's wrapped in {"Val": ...} format
+                        if isinstance(field_value, dict) and "Val" in field_value:
+                            data["Ventilation"][normalized_field] = field_value["Val"]
+                        else:
+                            data["Ventilation"][normalized_field] = field_value
                 
-                logger.debug("Normalized calibration data from Ventilation.Calibration to Calibration section")
+                logger.debug("Normalized calibration data from Ventilation.Calibration to Ventilation.Calib* fields")
         
         return data
 
@@ -1389,8 +1394,8 @@ class APIClient:
             board_info = {
                 "Mac": self._mac_address,
                 "Serial": self._board_serial,
-                "SwVersion": None,
-                "Uptime": getattr(self, '_board_uptime', None)
+                "SwVersion": self._board_swversion,  # Use cached swversion from /boardinfo as primary
+                "Uptime": self._board_uptime
             }
             
             # If not cached yet, try to fetch from /boardinfo
@@ -1398,36 +1403,38 @@ class APIClient:
                 self._cache_device_info()
                 board_info["Mac"] = self._mac_address
                 board_info["Serial"] = self._board_serial
-                board_info["Uptime"] = getattr(self, '_board_uptime', None)
+                board_info["SwVersion"] = self._board_swversion
+                board_info["Uptime"] = self._board_uptime
             
-            # Get software version from BOX node
-            # Find the BOX node in the node list
-            try:
-                nodes = self.get_nodes()
-                box_node = None
-                
-                # Look for a node with Type == "BOX"
-                if nodes.Nodes:
-                    for node in nodes.Nodes:
-                        if node.General and node.General.Type and node.General.Type.Val == "BOX":
-                            box_node = node
-                            break
-                
-                if box_node and box_node.General.SwVersion:
-                    if isinstance(box_node.General.SwVersion, dict) and "Val" in box_node.General.SwVersion:
-                        board_info["SwVersion"] = box_node.General.SwVersion["Val"]
-                    elif hasattr(box_node.General.SwVersion, "Val"):
-                        board_info["SwVersion"] = box_node.General.SwVersion.Val
+            # Try to get software version from BOX node as a secondary source
+            # (only if not already available from /boardinfo)
+            if not board_info["SwVersion"]:
+                try:
+                    nodes = self.get_nodes()
+                    box_node = None
+                    
+                    # Look for a node with Type == "BOX"
+                    if nodes.Nodes:
+                        for node in nodes.Nodes:
+                            if node.General and node.General.Type and node.General.Type.Val == "BOX":
+                                box_node = node
+                                break
+                    
+                    if box_node and box_node.General.SwVersion:
+                        if isinstance(box_node.General.SwVersion, dict) and "Val" in box_node.General.SwVersion:
+                            board_info["SwVersion"] = box_node.General.SwVersion["Val"]
+                        elif hasattr(box_node.General.SwVersion, "Val"):
+                            board_info["SwVersion"] = box_node.General.SwVersion.Val
+                        else:
+                            board_info["SwVersion"] = str(box_node.General.SwVersion)
+                        
+                        logger.debug("Found BOX node (ID: {}) with SwVersion: {}", 
+                                   box_node.Node, board_info["SwVersion"])
                     else:
-                        board_info["SwVersion"] = str(box_node.General.SwVersion)
-                    
-                    logger.debug("Found BOX node (ID: {}) with SwVersion: {}", 
-                               box_node.Node, board_info["SwVersion"])
-                else:
-                    logger.warning("BOX node not found or does not have SwVersion field")
-                    
-            except Exception as e:
-                logger.warning("Failed to retrieve BOX node software version: {}", e)
+                        logger.warning("BOX node not found or does not have SwVersion field")
+                        
+                except Exception as e:
+                    logger.warning("Failed to retrieve BOX node software version: {}", e)
             
             logger.info("Retrieved Communication/Print Board info: MAC={}, Serial={}, SwVersion={}", 
                        board_info["Mac"], board_info["Serial"], board_info["SwVersion"])

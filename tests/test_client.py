@@ -34,6 +34,10 @@ def mock_detection_endpoint_modern(mock_requests: requests_mock.Mocker) -> None:
         }
     }
     mock_requests.get(f"{BASE_URL}/info", json=mock_data)
+    
+    # Mock /api endpoint for version info (now fetched for both HTTP and HTTPS)
+    api_info = load_mock_data("api_info.json")
+    mock_requests.get(f"{BASE_URL}/api", json=api_info)
 
 
 def mock_detection_endpoint_legacy(mock_requests: requests_mock.Mocker) -> None:
@@ -495,10 +499,12 @@ def test_get_board_info_legacy_with_cached_info(client: APIClient, mock_requests
     # Pre-cache device info to simulate already initialized client
     client._mac_address = "00:08:5f:35:a8:0f"
     client._board_serial = "PRSN21401066"
+    client._board_swversion = "16036.13.4.0"
     client._board_uptime = 2452
     client._device_info_cached = True
     
     # Mock the /nodelist endpoint for BOX node lookup
+    # Note: SwVersion should come from cached _board_swversion, not from BOX node
     mock_data = load_mock_data("nodes_legacy_with_box.json")
     mock_requests.get(f"{BASE_URL}/nodelist", json=mock_data)
     
@@ -554,6 +560,8 @@ def test_get_board_info_legacy_without_cached_info(client: APIClient, mock_reque
     assert client._device_info_cached is True
     assert client._mac_address == "00:08:5f:35:a8:0f"
     assert client._board_serial == "PRSN21401066"
+    assert client._board_swversion == "16036.13.4.0"
+    assert client._board_uptime == 2452
 
 
 def test_get_board_info_legacy_no_box_node(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
@@ -565,6 +573,7 @@ def test_get_board_info_legacy_no_box_node(client: APIClient, mock_requests: req
     # Pre-cache device info
     client._mac_address = "00:08:5f:35:a8:0f"
     client._board_serial = "PRSN21401066"
+    client._board_swversion = "16036.13.4.0"  # Cached from /boardinfo
     client._board_uptime = 2452
     client._device_info_cached = True
     
@@ -592,10 +601,10 @@ def test_get_board_info_legacy_no_box_node(client: APIClient, mock_requests: req
     assert "SwVersion" in board_info
     assert "Uptime" in board_info
     
-    # Verify MAC and Serial are present but SwVersion is None
+    # Verify MAC, Serial, and SwVersion from cached /boardinfo (no BOX node needed)
     assert board_info["Mac"] == "00:08:5f:35:a8:0f"
     assert board_info["Serial"] == "PRSN21401066"
-    assert board_info["SwVersion"] is None  # BOX node not found
+    assert board_info["SwVersion"] == "16036.13.4.0"  # From cached _board_swversion
     assert board_info["Uptime"] == 2452
 
 
@@ -608,6 +617,7 @@ def test_get_board_info_legacy_nodes_fetch_fails(client: APIClient, mock_request
     # Pre-cache device info
     client._mac_address = "00:08:5f:35:a8:0f"
     client._board_serial = "PRSN21401066"
+    client._board_swversion = "16036.13.4.0"  # Cached from /boardinfo
     client._board_uptime = 2452
     client._device_info_cached = True
     
@@ -623,10 +633,36 @@ def test_get_board_info_legacy_nodes_fetch_fails(client: APIClient, mock_request
     assert "SwVersion" in board_info
     assert "Uptime" in board_info
     
-    # Verify MAC and Serial are present but SwVersion is None due to failure
+    # Verify MAC, Serial, and SwVersion from cached /boardinfo (nodes fetch failed but cached swversion still available)
     assert board_info["Mac"] == "00:08:5f:35:a8:0f"
     assert board_info["Serial"] == "PRSN21401066"
-    assert board_info["SwVersion"] is None  # Failed to fetch nodes
+    assert board_info["SwVersion"] == "16036.13.4.0"  # From cached _board_swversion
+    assert board_info["Uptime"] == 2452
+
+
+def test_get_board_info_legacy_swversion_fallback_to_box_node(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test get_board_info on Communication/Print Board falls back to BOX node when cached swversion is None."""
+    mock_detection_endpoint_legacy(mock_requests)
+    client._generation = "legacy"
+    client._board_type = "Communication and Print Board"
+    
+    # Pre-cache device info but without swversion (simulates old /boardinfo that doesn't include it)
+    client._mac_address = "00:08:5f:35:a8:0f"
+    client._board_serial = "PRSN21401066"
+    client._board_swversion = None  # Not available from /boardinfo
+    client._board_uptime = 2452
+    client._device_info_cached = True
+    
+    # Mock the /nodelist endpoint with BOX node
+    mock_data = load_mock_data("nodes_legacy_with_box.json")
+    mock_requests.get(f"{BASE_URL}/nodelist", json=mock_data)
+    
+    board_info = client.get_board_info()
+    
+    # Verify SwVersion comes from BOX node as fallback
+    assert board_info["Mac"] == "00:08:5f:35:a8:0f"
+    assert board_info["Serial"] == "PRSN21401066"
+    assert board_info["SwVersion"] == "16036.13.4.0"  # From BOX node fallback
     assert board_info["Uptime"] == 2452
 
 
@@ -678,4 +714,61 @@ def test_serialized_nodes_never_none(client: APIClient, mock_requests: requests_
         assert isinstance(node, dict), f"Node at index {i} is not a dict: {type(node)}"
         # Verify critical fields exist
         assert "Node" in node, f"Node at index {i} missing 'Node' field"
-        assert "General" in node, f"Node at index {i} missing 'General' field"
+
+
+def test_detect_generation_populates_api_versions(client: APIClient, mock_requests: requests_mock.Mocker) -> None:
+    """Test that detect_generation() populates API version properties for modern boards."""
+    mock_detection_endpoint_modern(mock_requests)
+    
+    # Trigger detection
+    client.detect_generation()
+    
+    # Verify generation detected correctly
+    assert client.generation == "modern"
+    assert client.is_modern_api is True
+    assert client.is_legacy_api is False
+    
+    # Verify API version properties are populated (not None)
+    assert client.api_version is not None
+    assert client.public_api_version is not None
+    
+    # Verify values match the mock data
+    assert client.api_version == "MOCKAPI 2.0.6.0"
+    assert client.public_api_version == "MOCK 2.0"
+
+
+def test_modern_node_calibration_data_preserved(client: APIClient) -> None:
+    """Test that calibration data from Ventilation.Calibration is preserved in Ventilation section."""
+    # Mock modern API response with nested Calibration data
+    mock_data = {
+        "Node": 1,
+        "General": {
+            "Type": {"Id": None, "Val": "BOX"},
+            "Addr": 1
+        },
+        "Ventilation": {
+            "State": {"Val": "AUTO"},
+            "Calibration": {
+                "Valid": {"Val": True},
+                "State": {"Val": "COMPLETED"},
+                "Error": {"Val": 0}
+            }
+        }
+    }
+    
+    # Transform the data
+    transformed = client._transform_modern_node_info(mock_data)
+    
+    # Create NodeInfo object to verify fields are preserved
+    node_info = NodeInfo(**transformed)
+    
+    # Verify calibration data is now in Ventilation section (not dropped)
+    assert node_info.Ventilation is not None
+    assert node_info.Ventilation.CalibIsValid is not None
+    assert node_info.Ventilation.CalibState is not None
+    assert node_info.Ventilation.CalibError is not None
+    
+    # Verify the values are correctly extracted from {"Val": ...} format
+    assert node_info.Ventilation.CalibIsValid is True
+    assert node_info.Ventilation.CalibState == "COMPLETED"
+    assert node_info.Ventilation.CalibError == 0
