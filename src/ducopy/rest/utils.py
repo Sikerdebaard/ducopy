@@ -107,14 +107,25 @@ class DucoUrlSession(requests.Session):
 
         logger.info("Initialized DucoUrlSession for base URL: {}", base_url)
 
-    def _ensure_apikey(self) -> None:
-        """Refresh API key if expired or missing."""
+    def _ensure_apikey(self, info_data: dict | None = None) -> None:
+        """Refresh API key if expired or missing.
+        
+        Args:
+            info_data (dict, optional): Pre-fetched /info response data to avoid duplicate requests.
+                                       If None, will fetch /info data.
+        """
         if not self.api_key or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration:
             logger.debug("API key is missing or expired. Fetching a new one.")
-            endpoint = self.endpoint_mapper("/info") if self.endpoint_mapper else "/info"
-            req = self.request("GET", endpoint, ensure_apikey=False)
-            req.raise_for_status()
-            data = req.json()
+            
+            # Use provided info data if available, otherwise fetch it
+            if info_data is not None:
+                logger.debug("Using pre-fetched /info data for API key generation")
+                data = info_data
+            else:
+                endpoint = self.endpoint_mapper("/info") if self.endpoint_mapper else "/info"
+                req = self.request("GET", endpoint, ensure_apikey=False)
+                req.raise_for_status()
+                data = req.json()
 
             # Check if this is a Connectivity Board (modern) API response with nested structure
             # Connectivity Board has data["General"]["Lan"]["Mac"]["Val"]
@@ -136,6 +147,9 @@ class DucoUrlSession(requests.Session):
                 logger.debug("Communication and Print Board detected - API keys not required")
                 self.api_key = "legacy-no-key-required"
                 self.api_key_timestamp = time.time()
+                # Set cache duration to effectively infinite for legacy boards to avoid unnecessary refreshes
+                # Legacy boards don't use API keys, so no need to periodically re-fetch /boxinfoget
+                self.api_key_cache_duration = 365 * 24 * 60 * 60 * 10  # 10 years in seconds
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 
     def request(
@@ -143,7 +157,7 @@ class DucoUrlSession(requests.Session):
     ) -> requests.Response:
         """
         Sends a request, automatically prepending the base URL to the given URL if it's relative.
-        Implements an exponential backoff retry strategy (up to 5 attempts) on request failures.
+        Implements an exponential backoff retry strategy (up to 3 attempts) on request failures.
 
         Args:
             method (str): The HTTP method for the request (e.g., 'GET', 'POST').

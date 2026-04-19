@@ -1,5 +1,6 @@
 import pytest
 import requests_mock
+import requests.exceptions
 import json
 from typing import Any
 from ducopy.rest.client import APIClient
@@ -786,3 +787,28 @@ def test_modern_node_calibration_data_preserved(client: APIClient) -> None:
     assert node_info.Ventilation.CalibIsValid is True
     assert node_info.Ventilation.CalibState == "COMPLETED"
     assert node_info.Ventilation.CalibError == 0
+
+
+def test_detect_generation_ssl_error_with_https() -> None:
+    """Test that SSLError when using HTTPS raises helpful ConnectionError about using HTTP."""
+    https_url = "https://localhost:5000"
+    
+    with requests_mock.Mocker() as mock_requests:
+        # Simulate SSLError when trying to connect to HTTP-only legacy board via HTTPS
+        # This often happens with "wrong version number" or similar SSL errors
+        mock_requests.get(
+            f"{https_url}/info",
+            exc=requests.exceptions.SSLError("HTTPSConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /info (Caused by SSLError(SSLError(1, '[SSL: WRONG_VERSION_NUMBER] wrong version number (_ssl.c:1000)')))")
+        )
+        
+        client = APIClient(base_url=https_url, verify=False, auto_detect=False)
+        
+        # Should raise ConnectionError with helpful message about using HTTP
+        with pytest.raises(ConnectionError) as exc_info:
+            client.detect_generation()
+        
+        # Verify the error message guides user to use HTTP instead
+        error_message = str(exc_info.value)
+        assert "http://" in error_message.lower()
+        assert "https://" in error_message.lower()
+        assert "Communication and Print Board only supports HTTP" in error_message

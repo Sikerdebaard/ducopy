@@ -174,7 +174,7 @@ class APIClient:
             logger.debug("Attempting to fetch /info endpoint...")
             response = self.session.request("GET", "/info", ensure_apikey=False)
             response.raise_for_status()
-            response.json()
+            info_data = response.json()
             
             # If we got here, /info exists - this indicates Connectivity Board (modern API)
             # The /info endpoint is the key characteristic of Connectivity Boards (V1 and V2 hardware variants)
@@ -186,7 +186,8 @@ class APIClient:
             logger.debug("Fetching version info from /api endpoint...")
             try:
                 # Generate API key if needed (required for /api on Connectivity Board)
-                self.session._ensure_apikey()
+                # Reuse the already-fetched info_data to avoid duplicate /info request
+                self.session._ensure_apikey(info_data=info_data)
                 
                 api_response = self.session.request("GET", "/api", ensure_apikey=False)
                 api_response.raise_for_status()
@@ -218,7 +219,8 @@ class APIClient:
                 )
             
             # Cache device identification info
-            self._cache_device_info()
+            # Reuse the already-fetched info_data to avoid duplicate /info request
+            self._cache_device_info(info_data=info_data)
             
             return {
                 "generation": self._generation,
@@ -303,8 +305,12 @@ class APIClient:
                         "Please verify the URL is correct and the device is accessible."
                     ) from e
             
-            # Check if it's a timeout or connection error with HTTPS
-            if is_https and ("timeout" in error_message.lower() or "connection" in error_message.lower()):
+            # Check if it's an SSL error, timeout, or connection error with HTTPS
+            # Legacy boards (HTTP-only) often produce SSLError when contacted via HTTPS
+            is_ssl_error = isinstance(e, (requests.exceptions.SSLError, urllib3.exceptions.SSLError))
+            is_connection_like_error = "timeout" in error_message.lower() or "connection" in error_message.lower()
+            
+            if is_https and (is_ssl_error or is_connection_like_error):
                 logger.warning("HTTPS connection failed. Communication and Print Board only supports HTTP.")
                 raise ConnectionError(
                     "Failed to connect via HTTPS. The Communication and Print Board only supports HTTP connections. "
@@ -406,7 +412,7 @@ class APIClient:
         """
         return self._board_serial
 
-    def _cache_device_info(self) -> None:
+    def _cache_device_info(self, info_data: dict | None = None) -> None:
         """
         Cache device identification information (MAC address, serial number).
         
@@ -415,6 +421,10 @@ class APIClient:
         - Communication/Print Board (legacy): MAC is in /boardinfo endpoint
         
         The cached info is then available via properties for consistent access.
+        
+        Args:
+            info_data (dict, optional): Pre-fetched /info response data to avoid duplicate requests.
+                                       Only used for modern boards. If None, will fetch /info data.
         """
         if self._device_info_cached:
             logger.debug("Device info already cached")
@@ -423,10 +433,15 @@ class APIClient:
         try:
             if self.is_modern_api:
                 # Connectivity Board: /info has everything
-                logger.debug("Fetching device info from /info endpoint (Connectivity Board)")
-                response = self.session.request("GET", "/info", ensure_apikey=False)
-                response.raise_for_status()
-                data = response.json()
+                # Use provided info data if available, otherwise fetch it
+                if info_data is not None:
+                    logger.debug("Using pre-fetched /info data for device info cache")
+                    data = info_data
+                else:
+                    logger.debug("Fetching device info from /info endpoint (Connectivity Board)")
+                    response = self.session.request("GET", "/info", ensure_apikey=False)
+                    response.raise_for_status()
+                    data = response.json()
                 
                 # Extract MAC and serial from nested structure
                 if "General" in data and "Lan" in data["General"]:
@@ -759,7 +774,7 @@ class APIClient:
         For Communication and Print Board: GET to /nodesetoperstate?node={node_id}&value={value}
 
         Args:
-            action (str): The action key. For Communication and Print Board, only "OperState" is supported.
+            action (str): The action key. For Communication and Print Board, only "OperState" and "SetVentilationState" are supported.
             value (str): The value/state to set (e.g., 'AUTO', 'AUT1', 'MAN1', etc.).
             node_id (int): The ID of the node to perform the action on.
 
