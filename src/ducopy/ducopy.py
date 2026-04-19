@@ -250,7 +250,7 @@ class DucoPy:
                     "Mac": str,           # MAC address (e.g., "AA:BB:CC:DD:EE:FF")
                     "Serial": str,        # Board serial number (e.g., "BOARD123456")
                     "SwVersion": str,     # Software version (e.g., "2.0.6.0" or "16010.3.7.0")
-                    "Uptime": str,        # Optional uptime value on boards that expose it
+                    "Uptime": int | None, # Board uptime in seconds (Communication/Print boards only, None for Connectivity)
                 }
                 
         Example:

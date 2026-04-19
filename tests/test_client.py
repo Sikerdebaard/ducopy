@@ -306,7 +306,7 @@ def test_get_nodes_legacy(client: APIClient, mock_requests: requests_mock.Mocker
         },
     }
 
-    def nodeinfoget_callback(request: Any, context: Any) -> dict[str, Any]:
+    def nodeinfoget_callback(request: Any, context: Any) -> dict[str, Any]:  # noqa: ANN401
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -358,7 +358,7 @@ def test_get_nodes_legacy_partial_failure(client: APIClient, mock_requests: requ
     mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1, 2, 3]})
     
     # Mock responses: node 1 and 3 succeed, node 2 fails
-    def node_info_callback(request, context):
+    def node_info_callback(request: Any, context: Any) -> dict[str, Any] | str:  # noqa: ANN401
         params = request.qs
         node_id = int(params['node'][0]) if 'node' in params else 1
         

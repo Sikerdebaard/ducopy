@@ -73,7 +73,7 @@ def validate_url(url: str) -> str:
 def print_output(data: Any, format: str) -> None:  # noqa: ANN401
     """Print output in the specified format."""
     # Recursively convert Pydantic models to dicts
-    def convert_to_dict(obj):
+    def convert_to_dict(obj: Any) -> Any:  # noqa: ANN401
         if isinstance(obj, BaseModel):
             return obj.model_dump() if hasattr(obj, "model_dump") else obj.dict()
         elif isinstance(obj, dict):

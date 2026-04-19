@@ -34,6 +34,7 @@
 # SOFTWARE.
 #
 from pydantic import HttpUrl
+from typing import Any
 from ducopy.rest.models import (
     ActionsResponse,
     NodeInfo,
@@ -65,13 +66,16 @@ class APIClient:
     # Note: do not map the modern "/api" endpoint to "/boxinfoget".
     # "/boxinfoget" returns legacy board/device metadata, not API metadata,
     # so remapping would make callers receive misleading data for API-info requests.
+    #
+    # Note: /config/nodes is not mapped because there's no equivalent bulk endpoint on legacy boards.
+    # Use get_config_nodes() instead, which implements aggregation by looping over individual nodes.
     GEN1_ENDPOINT_MAP = {
         "/info": "/boxinfoget",
         "/info/nodes": "/nodelist",
-        "/config/nodes": "/boxinfoget",
     }
     # Pattern for node-specific endpoints (Connectivity Board -> Communication and Print Board)
     # /info/nodes/{id} -> /nodeinfoget?node={id}
+    # /config/nodes/{id} -> /nodeconfigget?node={id}
     
     def __init__(self, base_url: HttpUrl, verify: bool = True, auto_detect: bool = True) -> None:
         self.base_url = base_url
@@ -148,9 +152,10 @@ class APIClient:
         
         Detection logic:
         1. Use the currently configured base URL and session to request /info
-        2. If /info returns modern API data, classify it as a Connectivity Board
-        3. If /info indicates a legacy response or returns 404, classify it as a
-           Communication and Print Board
+        2. If /info endpoint exists and returns data, classify as Connectivity Board (modern)
+           - This applies to both V1 and V2 Connectivity Board hardware variants
+           - The presence of /info is the key distinguishing feature, not the API version number
+        3. If /info returns 404 or causes connection errors, classify as Communication and Print Board (legacy)
         4. This method does not retry with a different protocol; if HTTPS is used
            against a legacy HTTP-only board, a connection-related error may be raised
         
@@ -176,8 +181,9 @@ class APIClient:
                 self._board_type = "Connectivity Board"
                 logger.info("Detected Connectivity Board (modern API) - HTTPS with /info endpoint")
             else:
-                # HTTP + /info exists - need to check version
-                logger.debug("Got /info on HTTP, checking version...")
+                # HTTP + /info exists - this indicates Connectivity Board (modern API)
+                # The /info endpoint is the key characteristic of Connectivity Boards (V1 and V2 hardware variants)
+                logger.debug("Got /info on HTTP, fetching version info...")
                 try:
                     api_response = self.session.request("GET", "/api", ensure_apikey=False)
                     api_response.raise_for_status()
@@ -185,25 +191,14 @@ class APIClient:
                     
                     self._api_version = api_info.get("ApiVersion", {}).get("Val")
                     self._public_api_version = api_info.get("PublicApiVersion", {}).get("Val")
-                    
-                    if self._public_api_version:
-                        version_str = str(self._public_api_version)
-                        if "2." in version_str:
-                            self._generation = "modern"
-                            self._board_type = "Connectivity Board"
-                        elif "1." in version_str:
-                            self._generation = "legacy"
-                            self._board_type = "Communication and Print Board"
-                        else:
-                            self._generation = "unknown"
-                            self._board_type = "Unknown Board"
-                    else:
-                        self._generation = "legacy"
-                        self._board_type = "Communication and Print Board"
                 except Exception:
-                    # /info works but /api doesn't - assume modern
-                    self._generation = "modern"
-                    self._board_type = "Connectivity Board"
+                    # /api endpoint may not be available or may error
+                    logger.debug("Could not fetch /api endpoint, but /info exists")
+                
+                # If /info endpoint exists and returns data, classify as Connectivity Board (modern)
+                # This applies to both V1 and V2 Connectivity Board hardware variants
+                self._generation = "modern"
+                self._board_type = "Connectivity Board"
             
             logger.info(
                 "API generation detected: {} (Protocol: {}, Board: {})",
@@ -518,7 +513,7 @@ class APIClient:
         Returns:
             dict: Transformed data with values wrapped in {"Val": value} format
         """
-        def wrap_value(value):
+        def wrap_value(value: Any) -> dict[str, Any] | None:  # noqa: ANN401
             """Wrap a value in {"Val": value} format if not None."""
             if value is None:
                 return None
@@ -681,6 +676,10 @@ class APIClient:
     def raw_get(self, endpoint: str, params: dict = None) -> dict:
         """
         Perform a raw GET request to the specified endpoint.
+        
+        Note: Endpoint mapping is applied for Communication and Print Board (legacy API) compatibility.
+        Some endpoints may not have legacy equivalents (e.g., /config/nodes). Use the high-level
+        methods like get_config_nodes() which handle board differences automatically.
 
         Args:
             endpoint (str): The endpoint to send the GET request to (e.g., "/api").
@@ -924,6 +923,11 @@ class APIClient:
     def get_config_nodes(self) -> NodesResponse:
         """
         Retrieve the configuration settings for all nodes.
+        
+        Board compatibility:
+        - Connectivity Board: Uses the /config/nodes bulk endpoint
+        - Communication/Print Board: Aggregates results by calling get_config_node() for each node
+          (no equivalent bulk endpoint exists on legacy boards)
 
         Returns:
             NodesResponse: Parsed response containing configuration data for all nodes.
@@ -1327,7 +1331,7 @@ class APIClient:
                     "Mac": str,           # MAC address (e.g., "AA:BB:CC:DD:EE:FF")
                     "Serial": str,        # Board serial number (e.g., "BOARD123456")
                     "SwVersion": str,     # Software version (e.g., "2.0.6.0" or "16010.3.7.0")
-                    "Uptime": int,        # Board uptime in seconds (Communication/Print boards only, None for Connectivity)
+                    "Uptime": int | None, # Board uptime in seconds (Communication/Print boards only, None for Connectivity)
                 }
                 
         Example:
