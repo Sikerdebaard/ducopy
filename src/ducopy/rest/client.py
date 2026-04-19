@@ -242,7 +242,7 @@ class APIClient:
             
             # Check for header parsing errors (legacy Communication/Print board returns malformed headers)
             is_header_error = False
-            if isinstance(e, (urllib3.exceptions.HeaderParsingError, urllib3.exceptions.HTTPError)):
+            if isinstance(e, urllib3.exceptions.HeaderParsingError):
                 is_header_error = True
                 logger.debug("Detected header parsing error: {}", e)
             elif isinstance(e, requests.exceptions.RequestException):
