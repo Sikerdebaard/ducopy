@@ -278,17 +278,53 @@ def test_get_nodes_legacy(client: APIClient, mock_requests: requests_mock.Mocker
     # Mock nodelist response
     mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": [1, 2, 3]})
     
-    # Mock individual node info responses
-    for node_id in [1, 2, 3]:
-        mock_data = {
-            "node": node_id,
+    # Mock individual node info responses keyed by requested node id
+    node_responses = {
+        1: {
+            "node": 1,
             "devtype": "VLVRH",
-            "addr": node_id,
+            "addr": 1,
             "state": "AUTO",
             "ovrl": 255,
-            "cerr": 0
-        }
-        mock_requests.get(f"{BASE_URL}/nodeinfoget", json=mock_data)
+            "cerr": 0,
+        },
+        2: {
+            "node": 2,
+            "devtype": "VLVRH",
+            "addr": 2,
+            "state": "AUTO",
+            "ovrl": 255,
+            "cerr": 0,
+        },
+        3: {
+            "node": 3,
+            "devtype": "VLVRH",
+            "addr": 3,
+            "state": "AUTO",
+            "ovrl": 255,
+            "cerr": 0,
+        },
+    }
+
+    def nodeinfoget_callback(request: Any, context: Any) -> dict[str, Any]:
+        node_values = request.qs.get("node")
+        if not node_values:
+            context.status_code = 400
+            return {"error": "missing node parameter"}
+
+        node_id = int(node_values[0])
+        mock_data = node_responses.get(node_id)
+        if mock_data is None:
+            context.status_code = 404
+            return {"error": f"unknown node {node_id}"}
+
+        return mock_data
+
+    mock_requests.get(
+        f"{BASE_URL}/nodeinfoget",
+        additional_matcher=lambda request: "node" in request.qs,
+        json=nodeinfoget_callback,
+    )
     
     response = client.get_nodes()
     assert isinstance(response, NodesInfoResponse)
