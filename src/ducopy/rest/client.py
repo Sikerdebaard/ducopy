@@ -305,16 +305,16 @@ class APIClient:
                         "Please verify the URL is correct and the device is accessible."
                     ) from e
             
-            # Check if it's an SSL error, timeout, or connection error with HTTPS
+            # Check if it's an SSL/TLS error with HTTPS
             # Legacy boards (HTTP-only) often produce SSLError when contacted via HTTPS
             is_ssl_error = isinstance(e, (requests.exceptions.SSLError, urllib3.exceptions.SSLError))
-            is_connection_like_error = "timeout" in error_message.lower() or "connection" in error_message.lower()
+            is_wrong_version_error = "wrong_version_number" in error_message.lower()
             
-            if is_https and (is_ssl_error or is_connection_like_error):
-                logger.warning("HTTPS connection failed. Communication and Print Board only supports HTTP.")
+            if is_https and (is_ssl_error or is_wrong_version_error):
+                logger.warning("HTTPS SSL/TLS negotiation failed. Communication and Print Board may only support HTTP.")
                 raise ConnectionError(
-                    "Failed to connect via HTTPS. The Communication and Print Board only supports HTTP connections. "
-                    "Please use 'http://' instead of 'https://' in the URL."
+                    "Failed to connect via HTTPS due to an SSL/TLS error. "
+                    "If you are connecting to a legacy Communication and Print Board, please use 'http://' instead of 'https://' in the URL."
                 ) from e
             
             # Other error - connection failed or other issue
