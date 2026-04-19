@@ -88,7 +88,8 @@ class DucoPy:
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically. Defaults to None.
+            data (dict | list, optional): The data to include in the request body. 
+                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors. Defaults to None.
 
         Returns:
             dict: JSON response from the server.
@@ -100,7 +101,8 @@ class DucoPy:
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically. Defaults to None.
+            data (dict | list, optional): The data to include in the request body. 
+                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors. Defaults to None.
 
         Returns:
             dict: JSON response from the server.

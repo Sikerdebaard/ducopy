@@ -734,7 +734,8 @@ class APIClient:
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically.
+            data (dict | list, optional): The data to include in the request body. 
+                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints.
 
         Returns:
             dict: JSON response from the server.
@@ -743,7 +744,9 @@ class APIClient:
         mapped_endpoint = self._map_endpoint(endpoint)
         
         logger.info(f"Performing raw POST request to endpoint: {mapped_endpoint} with data: {data}")
-        response = self.session.post(mapped_endpoint, json=data)
+        # Use compact JSON serialization (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints
+        serialized_data = json.dumps(data, separators=(",", ":")) if data is not None else None
+        response = self.session.post(mapped_endpoint, data=serialized_data)
         response.raise_for_status()
         logger.debug("Received response for raw POST request to endpoint: {}", mapped_endpoint)
         return response.json()
@@ -757,7 +760,8 @@ class APIClient:
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. Will be JSON-serialized automatically.
+            data (dict | list, optional): The data to include in the request body. 
+                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints.
 
         Returns:
             dict: JSON response from the server.
@@ -766,7 +770,9 @@ class APIClient:
         mapped_endpoint = self._map_endpoint(endpoint)
         
         logger.info(f"Performing raw PATCH request to endpoint: {mapped_endpoint} with data: {data}")
-        response = self.session.patch(mapped_endpoint, json=data)
+        # Use compact JSON serialization (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints
+        serialized_data = json.dumps(data, separators=(",", ":")) if data is not None else None
+        response = self.session.patch(mapped_endpoint, data=serialized_data)
         response.raise_for_status()
         logger.debug(f"Received response for raw PATCH request to endpoint: {mapped_endpoint}")
         return response.json()
