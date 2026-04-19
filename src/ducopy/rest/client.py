@@ -150,16 +150,21 @@ class APIClient:
         This method determines whether we're communicating with:
         - Connectivity Board (modern API): /info endpoint exists
           Includes V1 and V2 variants
-        - Communication and Print Board (legacy API): /info returns 404 or legacy data
+        - Communication and Print Board (legacy API): /info is unavailable and a
+          legacy-specific response pattern can be confirmed
         
         Detection logic:
         1. Use the currently configured base URL and session to request /info
         2. If /info endpoint exists and returns data, classify as Connectivity Board (modern)
            - This applies to both V1 and V2 Connectivity Board hardware variants
            - The presence of /info is the key distinguishing feature, not the API version number
-        3. If /info returns 404 or causes connection errors, classify as Communication and Print Board (legacy)
-        4. This method does not retry with a different protocol; if HTTPS is used
-           against a legacy HTTP-only board, a connection-related error may be raised
+        3. If /info returns 404 and legacy-specific behavior can be confirmed, classify as
+           Communication and Print Board (legacy)
+        4. Connection failures are not generally treated as legacy detection; they are
+           re-raised so callers can handle network, URL, or protocol issues explicitly
+        5. This method does not retry with a different protocol; if HTTPS is used
+           against a legacy HTTP-only board, an SSL-related failure may be raised as a
+           ConnectionError instructing the caller to use HTTP
         
         Returns:
             dict: API information including version details and board type
