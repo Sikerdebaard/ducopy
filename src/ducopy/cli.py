@@ -455,7 +455,15 @@ def get_action(
     generation_info = _build_generation_info(facade)
     
     # Get action data
-    action_data = facade.get_action(action=action)
+    try:
+        action_data = facade.get_action(action=action)
+    except NotImplementedError as exc:
+        board_type = generation_info.get("board_type", "unknown")
+        typer.echo(
+            f"Error: actions are not supported for board type '{board_type}'.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
     
     # Combine both
     output = {
@@ -481,7 +489,11 @@ def get_actions_node(
     generation_info = _build_generation_info(facade)
     
     # Get actions data
-    actions_data = facade.get_actions_node(node_id=node_id, action=action)
+    try:
+        actions_data = facade.get_actions_node(node_id=node_id, action=action)
+    except NotImplementedError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1)
     
     # Combine both
     output = {
