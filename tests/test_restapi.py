@@ -132,7 +132,7 @@ def test_set_actions_node(client: APIClient) -> None:
 
 
 def test_set_actions_node_insecure(client_insecure: APIClient) -> None:
-    """Test fetching configuration settings for a specific node with SSL verification."""
+    """Test setting actions for a specific node action without SSL verification."""
     set_action_response = client_insecure.post_action_node(action="SetVentilationState", value="MAN1", node_id=1)
     assert isinstance(set_action_response, ActionsChangeResponse), "Expected ActionsChangeResponse instance"
     # Code field is optional, check if present
