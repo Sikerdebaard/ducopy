@@ -54,6 +54,7 @@ from loguru import logger
 import importlib.resources as pkg_resources
 from ducopy import certs
 import json
+import time
 import urllib3.exceptions
 import requests.exceptions
 
@@ -259,6 +260,13 @@ class APIClient:
                     self._board_type = "Communication and Print Board"
                     logger.info("Detected Communication and Print Board (legacy API) - confirmed via /boxinfoget endpoint")
                     
+                    # Initialize session API key state to skip key generation on subsequent requests
+                    # Legacy boards don't use API keys, so set sentinel value with long cache duration
+                    self.session.api_key = "legacy-no-key-required"
+                    self.session.api_key_timestamp = time.time()
+                    self.session.api_key_cache_duration = 365 * 24 * 60 * 60 * 10  # 10 years
+                    logger.debug("Initialized legacy board API key state (no keys required)")
+                    
                     # Cache device identification info
                     self._cache_device_info()
                     
@@ -285,6 +293,13 @@ class APIClient:
                     self._generation = "legacy"
                     self._board_type = "Communication and Print Board"
                     logger.info("Detected Communication and Print Board (legacy API) - /info not found, confirmed via /boxinfoget")
+                    
+                    # Initialize session API key state to skip key generation on subsequent requests
+                    # Legacy boards don't use API keys, so set sentinel value with long cache duration
+                    self.session.api_key = "legacy-no-key-required"
+                    self.session.api_key_timestamp = time.time()
+                    self.session.api_key_cache_duration = 365 * 24 * 60 * 60 * 10  # 10 years
+                    logger.debug("Initialized legacy board API key state (no keys required)")
                     
                     # Cache device identification info
                     self._cache_device_info()
