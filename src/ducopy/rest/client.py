@@ -725,7 +725,7 @@ class APIClient:
         logger.debug("Received response for raw GET request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_post(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
+    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
         """
         Perform a raw POST request to the specified endpoint with retry logic.
         
@@ -734,8 +734,9 @@ class APIClient:
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. 
-                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints.
+            data (str | dict | list, optional): The data to include in the request body. 
+                If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
+                If str, will be passed through unchanged (assumed to be pre-serialized JSON or other content).
 
         Returns:
             dict: JSON response from the server.
@@ -745,13 +746,21 @@ class APIClient:
         
         logger.info(f"Performing raw POST request to endpoint: {mapped_endpoint} with data: {data}")
         # Use compact JSON serialization (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints
-        serialized_data = json.dumps(data, separators=(",", ":")) if data is not None else None
-        response = self.session.post(mapped_endpoint, data=serialized_data)
+        # Only serialize if data is dict or list; pass through strings unchanged for backwards compatibility
+        if isinstance(data, (dict, list)):
+            serialized_data = json.dumps(data, separators=(",", ":"))
+        elif isinstance(data, str):
+            serialized_data = data
+        else:
+            serialized_data = None
+        
+        headers = {"Content-Type": "application/json"} if serialized_data is not None else None
+        response = self.session.post(mapped_endpoint, data=serialized_data, headers=headers)
         response.raise_for_status()
         logger.debug("Received response for raw POST request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_patch(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
+    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
         """
         Perform a raw PATCH request to the specified endpoint with retry logic.
         
@@ -760,8 +769,9 @@ class APIClient:
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. 
-                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints.
+            data (str | dict | list, optional): The data to include in the request body. 
+                If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
+                If str, will be passed through unchanged (assumed to be pre-serialized JSON or other content).
 
         Returns:
             dict: JSON response from the server.
@@ -771,8 +781,16 @@ class APIClient:
         
         logger.info(f"Performing raw PATCH request to endpoint: {mapped_endpoint} with data: {data}")
         # Use compact JSON serialization (no whitespace) to avoid 400 errors on whitespace-sensitive endpoints
-        serialized_data = json.dumps(data, separators=(",", ":")) if data is not None else None
-        response = self.session.patch(mapped_endpoint, data=serialized_data)
+        # Only serialize if data is dict or list; pass through strings unchanged for backwards compatibility
+        if isinstance(data, (dict, list)):
+            serialized_data = json.dumps(data, separators=(",", ":"))
+        elif isinstance(data, str):
+            serialized_data = data
+        else:
+            serialized_data = None
+        
+        headers = {"Content-Type": "application/json"} if serialized_data is not None else None
+        response = self.session.patch(mapped_endpoint, data=serialized_data, headers=headers)
         response.raise_for_status()
         logger.debug(f"Received response for raw PATCH request to endpoint: {mapped_endpoint}")
         return response.json()
@@ -859,7 +877,7 @@ class APIClient:
         # Without this, aka without removing space between the two key value pairs, it will return a 400 error
         serialized_body = json.dumps(request_body, separators=(",", ":"))
 
-        response = self.session.post(endpoint, data=serialized_body)
+        response = self.session.post(endpoint, data=serialized_body, headers={"Content-Type": "application/json"})
         response.raise_for_status()
         logger.debug(
             "Received response for POST action from Node: {} with Action: {} and Val: {}", node_id, action, value

@@ -83,26 +83,28 @@ class DucoPy:
         )
         logger.info("DucoPy logging configured with level: {}", level)
 
-    def raw_post(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
+    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
         """Perform a raw POST request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. 
-                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors. Defaults to None.
+            data (str | dict | list, optional): The data to include in the request body. 
+                If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
+                If str, will be passed through unchanged. Defaults to None.
 
         Returns:
             dict: JSON response from the server.
         """
         return self.client.raw_post(endpoint=endpoint, data=data)
 
-    def raw_patch(self, endpoint: str, data: dict[str, Any] | list | None = None) -> dict:
+    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None) -> dict:
         """Perform a raw PATCH request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
-            data (dict | list, optional): The data to include in the request body. 
-                Will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors. Defaults to None.
+            data (str | dict | list, optional): The data to include in the request body. 
+                If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
+                If str, will be passed through unchanged. Defaults to None.
 
         Returns:
             dict: JSON response from the server.
