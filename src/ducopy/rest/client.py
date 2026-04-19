@@ -437,6 +437,9 @@ class APIClient:
                 logger.info("Cached device info from Connectivity Board: MAC={}, Serial={}", 
                            self._mac_address, self._board_serial)
                 
+                # Mark cache as complete only after successful fetch
+                self._device_info_cached = True
+                
             elif self.is_legacy_api:
                 # Communication/Print Board: Need /boardinfo for MAC
                 logger.debug("Fetching device info from /boardinfo endpoint (Communication/Print Board)")
@@ -457,11 +460,13 @@ class APIClient:
                     logger.info("Cached device info from Communication/Print Board: MAC={}, Serial={}, SwVersion={}, Uptime={}", 
                                self._mac_address, self._board_serial, self._board_swversion, self._board_uptime)
                     
+                    # Mark cache as complete only after successful fetch
+                    self._device_info_cached = True
+                    
                 except Exception as e:
                     logger.warning("Failed to fetch /boardinfo endpoint: {}. Device info may be incomplete.", e)
-                    # Continue - partial info is acceptable
-            
-            self._device_info_cached = True
+                    # Don't mark cache as complete - allow retry on next call
+                    # Continue - partial info is acceptable, but we want to retry later
             
         except Exception as e:
             logger.error("Failed to cache device info: {}", e)
