@@ -91,7 +91,7 @@ Here is a list of the main methods available in the `DucoPy` facade:
 - `get_logs() -> dict`: Retrieve the system logs from the DucoBox.
 - `update_config_node(node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse`: Update node configuration.
 
-All methods return a dictionary or a Pydantic model instance. Use `.model_dump(mode='json')` on Pydantic models to get JSON-serializable output if needed.
+All methods return a dictionary or a Pydantic model instance. For JSON-serializable output from Pydantic models, use `.model_dump(mode='json')` with Pydantic v2 or `.dict()` with Pydantic v1.
 
 ## Using the CLI Client
 
