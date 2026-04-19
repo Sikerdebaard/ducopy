@@ -1440,12 +1440,7 @@ class APIClient:
                                 break
                     
                     if box_node and box_node.General.SwVersion:
-                        if isinstance(box_node.General.SwVersion, dict) and "Val" in box_node.General.SwVersion:
-                            board_info["SwVersion"] = box_node.General.SwVersion["Val"]
-                        elif hasattr(box_node.General.SwVersion, "Val"):
-                            board_info["SwVersion"] = box_node.General.SwVersion.Val
-                        else:
-                            board_info["SwVersion"] = str(box_node.General.SwVersion)
+                        board_info["SwVersion"] = box_node.General.SwVersion.Val
                         
                         logger.debug("Found BOX node (ID: {}) with SwVersion: {}", 
                                    box_node.Node, board_info["SwVersion"])
