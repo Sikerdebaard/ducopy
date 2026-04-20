@@ -262,7 +262,9 @@ def test_get_config_nodes_legacy(
         },
     }
 
-    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
+    def nodeinfoget_callback(
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -295,7 +297,9 @@ def test_get_config_nodes_legacy(
         },
     }
 
-    def nodeconfigget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
+    def nodeconfigget_callback(
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -359,7 +363,9 @@ def test_get_config_nodes_legacy_all_nodes_fail(
         },
     }
 
-    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
+    def nodeinfoget_callback(
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -422,7 +428,9 @@ def test_get_config_nodes_legacy_partial_failure(
         },
     }
 
-    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
+    def nodeinfoget_callback(
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -632,7 +640,9 @@ def test_get_nodes_legacy(
         },
     }
 
-    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
+    def nodeinfoget_callback(
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -1004,7 +1014,9 @@ def test_get_board_info_legacy_swversion_fallback_to_box_node(
 
     # Mock the legacy /nodeinfoget lookup used to fetch per-node details.
     # Return proper legacy response structure with integer node ID and required fields
-    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
+    def nodeinfoget_callback(
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any]:
         query_values = {key.lower(): value for key, value in request.qs.items()}
         requested_node = None
         for key in ("node", "nodeid", "nodename", "id", "name"):

@@ -69,3 +69,6 @@ ignore = ["E501", "ANN101"]
 
 [tool.ruff.lint.flake8-annotations]
 mypy-init-return = true
+
+[tool.black]
+target-version = ["py312"]
