@@ -259,11 +259,22 @@ jobs:
         run: twine check dist/*
 
       - name: Publish to PyPI
+        id: publish_to_pypi
         if: steps.version_check.outputs.changed == 'true'
+        continue-on-error: true
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: python -m twine upload dist/*
+
+      - name: Report PyPI publish status
+        if: steps.version_check.outputs.changed == 'true'
+        run: |
+          if [ "${{ steps.publish_to_pypi.outcome }}" = "failure" ]; then
+            echo "WARNING: PyPI publish failed, but continuing to create GitHub release."
+          else
+            echo "PyPI publish completed successfully."
+          fi
 
       - name: Create and push tag
         if: steps.release_gate.outputs.should_release == 'true'
