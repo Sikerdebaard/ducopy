@@ -868,10 +868,11 @@ class APIClient:
             # Legacy boards only support setting the operation state
             # Validate that the action is one we can handle
             supported_actions = {"OperState", "SetVentilationState"}
+            supported_actions_text = ", ".join(sorted(supported_actions))
             if action not in supported_actions:
                 raise NotImplementedError(
                     f"Action '{action}' is not supported on Communication and Print Board. "
-                    f"Only operation state changes are supported (supported actions: {supported_actions}). "
+                    f"Only operation state changes are supported (supported actions: {supported_actions_text}). "
                     f"Please use action='OperState' or upgrade to a Connectivity Board for full action support."
                 )
             
