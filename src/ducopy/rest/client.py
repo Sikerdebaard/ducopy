@@ -747,7 +747,7 @@ class APIClient:
             "Sensor": sensor_fields if sensor_fields else None,
         }
 
-    def raw_get(self, endpoint: str, params: dict = None) -> dict:
+    def raw_get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict:
         """
         Perform a raw GET request to the specified endpoint.
         
@@ -757,7 +757,7 @@ class APIClient:
 
         Args:
             endpoint (str): The endpoint to send the GET request to (e.g., "/api").
-            params (dict, optional): Query parameters to include in the request.
+            params (dict[str, Any], optional): Query parameters to include in the request.
 
         Returns:
             dict: JSON response from the server.

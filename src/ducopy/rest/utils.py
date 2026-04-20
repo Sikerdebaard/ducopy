@@ -40,7 +40,7 @@ import ssl
 from urllib.parse import urljoin
 from collections.abc import Callable
 import time
-from typing import Any
+from pydantic import HttpUrl
 from ducopy.rest.apikeygenerator import ApiKeyGenerator
 from loguru import logger
 import urllib3
@@ -72,12 +72,12 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
 
 
 class DucoUrlSession(requests.Session):
-    def __init__(self, base_url: str | Any, verify: bool | str = True, endpoint_mapper: Callable[[str], str] | None = None, timeout: int = 10) -> None:
+    def __init__(self, base_url: str | HttpUrl, verify: bool | str = True, endpoint_mapper: Callable[[str], str] | None = None, timeout: int = 10) -> None:
         """
         Initializes the BaseUrlSession with a base URL and optional SSL verification setting.
 
         Args:
-            base_url (str | Any): The base URL to prepend to relative URLs. Accepts str or URL-like objects (e.g., Pydantic HttpUrl).
+            base_url (str | HttpUrl): The base URL to prepend to relative URLs. Accepts str or Pydantic HttpUrl objects.
             verify (bool | str): Path to the certificate or a boolean indicating SSL verification.
             endpoint_mapper (Callable[[str], str] | None): Optional function to map endpoints for API generation compatibility.
             timeout (int): Request timeout in seconds. Defaults to 10 seconds.
