@@ -1,0 +1,24 @@
+{
+  "General": {
+    "Lan": {
+      "Mac": {
+        "Id": 65536,
+        "Val": "AA:BB:CC:DD:EE:FF"
+      }
+    },
+    "Board": {
+      "SerialBoardBox": {
+        "Id": 65537,
+        "Val": "CONN12345678"
+      },
+      "SwVersion": {
+        "Id": 65544,
+        "Val": "2.0.6.0"
+      },
+      "Time": {
+        "Id": 65545,
+        "Val": 1730471603
+      }
+    }
+  }
+}

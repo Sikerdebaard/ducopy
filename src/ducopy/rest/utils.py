@@ -34,13 +34,18 @@
 # SOFTWARE.
 #
 import requests
+import requests.exceptions
 from requests.adapters import HTTPAdapter
 import ssl
 from urllib.parse import urljoin
 from collections.abc import Callable
 import time
+from pydantic import HttpUrl
 from ducopy.rest.apikeygenerator import ApiKeyGenerator
 from loguru import logger
+import urllib3
+import urllib3.exceptions
+import warnings
 
 
 # Map the URL to the expected hostname in the certificate
@@ -67,16 +72,19 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
 
 
 class DucoUrlSession(requests.Session):
-    def __init__(self, base_url: str, verify: bool | str = True) -> None:
+    def __init__(self, base_url: str | HttpUrl, verify: bool | str = True, endpoint_mapper: Callable[[str], str] | None = None, timeout: int = 10) -> None:
         """
         Initializes the BaseUrlSession with a base URL and optional SSL verification setting.
 
         Args:
-            base_url (str): The base URL to prepend to relative URLs.
+            base_url (str | HttpUrl): The base URL to prepend to relative URLs. Accepts str or Pydantic HttpUrl objects.
             verify (bool | str): Path to the certificate or a boolean indicating SSL verification.
+            endpoint_mapper (Callable[[str], str] | None): Optional function to map endpoints for API generation compatibility.
+            timeout (int): Request timeout in seconds. Defaults to 10 seconds.
         """
         super().__init__()
-        self.base_url = base_url
+        self.base_url: str = str(base_url)
+        self.timeout = timeout
 
         if isinstance(verify, str):
             # Configure SSLContext to ignore hostname verification
@@ -84,37 +92,69 @@ class DucoUrlSession(requests.Session):
             ssl_context.load_verify_locations(verify)
             self.verify = True
 
-            # Mount adapter with SSLContext to the session
+            # Mount custom SSL adapter only for HTTPS; HTTP must keep the default adapter.
             adapter = CustomHostNameCheckingAdapter(ssl_context, custom_host_mapping)
             self.mount("https://", adapter)
-            self.mount("http://", adapter)
         else:
             self.verify = verify
+            # Suppress InsecureRequestWarning when SSL verification is intentionally disabled
+            if not verify:
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                warnings.filterwarnings('ignore', message='Unverified HTTPS request')
 
         self.api_key: str | None = None
         self.api_key_timestamp: float = 0.0
         self.api_key_cache_duration: int = 60
+        self.endpoint_mapper: Callable[[str], str] | None = endpoint_mapper
 
-        logger.info("Initialized DucoUrlSession for base URL: {}", base_url)
+        logger.info("Initialized DucoUrlSession for base URL: {}", self.base_url)
 
-    def _ensure_apikey(self) -> None:
-        """Refresh API key if expired or missing."""
+    def _ensure_apikey(self, info_data: dict | None = None) -> None:
+        """Refresh API key if expired or missing.
+        
+        Args:
+            info_data (dict, optional): Pre-fetched /info response data to avoid duplicate requests.
+                                       If None, will fetch /info data.
+        """
         if not self.api_key or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration:
             logger.debug("API key is missing or expired. Fetching a new one.")
-            req = self.request("GET", "/info", ensure_apikey=False)
-            req.raise_for_status()
-            data = req.json()
+            
+            # Use provided info data if available, otherwise fetch it
+            if info_data is not None:
+                logger.debug("Using pre-fetched /info data for API key generation")
+                data = info_data
+            else:
+                endpoint = self.endpoint_mapper("/info") if self.endpoint_mapper else "/info"
+                req = self.request("GET", endpoint, ensure_apikey=False)
+                data = req.json()
 
-            ducomac = data["General"]["Lan"]["Mac"]["Val"]
-            ducoserial = data["General"]["Board"]["SerialBoardBox"]["Val"]
-            ducotime = data["General"]["Board"]["Time"]["Val"]
+            # Check if this is a Connectivity Board (modern) API response with nested structure
+            # Connectivity Board has data["General"]["Lan"]["Mac"]["Val"]
+            # Communication and Print Board has a flatter structure and doesn't use API keys
+            if "Lan" in data.get("General", {}):
+                # Connectivity Board API - generate API key
+                ducomac = data["General"]["Lan"]["Mac"]["Val"]
+                ducoserial = data["General"]["Board"]["SerialBoardBox"]["Val"]
+                ducotime = data["General"]["Board"]["Time"]["Val"]
 
-            apigen = ApiKeyGenerator()
-            self.api_key = apigen.generate_api_key(ducoserial, ducomac, ducotime)
-            self.api_key_timestamp = time.time()
+                apigen = ApiKeyGenerator()
+                self.api_key = apigen.generate_api_key(ducoserial, ducomac, ducotime)
+                self.api_key_timestamp = time.time()
 
-            self.headers.update({"Api-Key": self.api_key})
-            logger.debug(f"Api-Key: {self.api_key}")
+                self.headers.update({"Api-Key": self.api_key})
+                if len(self.api_key) > 8:
+                    redacted_api_key = f"{self.api_key[:4]}...{self.api_key[-4:]}"
+                else:
+                    redacted_api_key = "***"
+                logger.debug(f"Api-Key: {redacted_api_key}")
+            else:
+                # Communication and Print Board - doesn't use API keys
+                logger.debug("Communication and Print Board detected - API keys not required")
+                self.api_key = "legacy-no-key-required"
+                self.api_key_timestamp = time.time()
+                # Set cache duration to effectively infinite for legacy boards to avoid unnecessary refreshes
+                # Legacy boards don't use API keys, so no need to periodically re-fetch /boxinfoget
+                self.api_key_cache_duration = 365 * 24 * 60 * 60 * 10  # 10 years in seconds
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 
     def request(
@@ -122,12 +162,17 @@ class DucoUrlSession(requests.Session):
     ) -> requests.Response:
         """
         Sends a request, automatically prepending the base URL to the given URL if it's relative.
-        Implements an exponential backoff retry strategy (up to 5 attempts) on request failures.
+        Implements an exponential backoff retry strategy (up to 3 attempts) on request failures.
+        
+        Note: API key validation is automatically skipped for /info and /boxinfoget endpoints
+        to prevent circular dependencies, as _ensure_apikey() itself fetches these endpoints
+        to generate or validate API keys.
 
         Args:
             method (str): The HTTP method for the request (e.g., 'GET', 'POST').
             url (str): The relative or absolute URL path for the request.
             ensure_apikey (bool): Whether to automatically ensure an API key is present/valid.
+                                 Defaults to True, but automatically disabled for /info and /boxinfoget.
 
         Returns:
             Response: The HTTP response from the server.
@@ -135,7 +180,11 @@ class DucoUrlSession(requests.Session):
         Raises:
             requests.RequestException: If all retry attempts fail or another request-related error occurs.
         """
-        if ensure_apikey:
+        # Skip API key check for /info and /boxinfoget endpoints to avoid circular dependency
+        # and prevent duplicate requests (_ensure_apikey itself fetches these endpoints)
+        is_info_endpoint = url.rstrip("/") in ("/info", "/boxinfoget")
+        
+        if ensure_apikey and not is_info_endpoint:
             self._ensure_apikey()
 
         # Join the base URL with the provided URL path
@@ -143,6 +192,7 @@ class DucoUrlSession(requests.Session):
             url = urljoin(self.base_url, url)
 
         kwargs.setdefault("verify", self.verify)
+        kwargs.setdefault("timeout", self.timeout)
 
         max_retries = 3
         for attempt in range(max_retries):
@@ -165,8 +215,34 @@ class DucoUrlSession(requests.Session):
                 else:
                     raise e
             except requests.RequestException as e:
+                # Fail fast for non-retryable errors like SSL/TLS issues
+                if self._is_non_retryable_error(e):
+                    logger.debug("Non-retryable error detected: {}", type(e).__name__)
+                    raise e
+                
                 if not self._retry_with_backoff(attempt, max_retries, url, e):
                     raise e
+
+    def _is_non_retryable_error(self, error: Exception) -> bool:
+        """Check if an error is non-retryable and should fail fast without backoff.
+        
+        Args:
+            error: The exception to check
+            
+        Returns:
+            bool: True if the error should not be retried (e.g., SSL errors, connection refused)
+        """
+        # SSL/TLS errors are not transient - wrong protocol, certificate issues, etc.
+        if isinstance(error, (requests.exceptions.SSLError, urllib3.exceptions.SSLError)):
+            return True
+        
+        # Connection refused typically means wrong port or service not running
+        if isinstance(error, requests.exceptions.ConnectionError):
+            error_msg = str(error).lower()
+            if "connection refused" in error_msg or "connection reset" in error_msg:
+                return True
+        
+        return False
 
     def _retry_with_backoff(self, attempt: int, max_retries: int, url: str, error: Exception) -> bool:
         logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, error)
