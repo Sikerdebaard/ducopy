@@ -85,7 +85,19 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
 
 
 # Helper function to extract `Val` from nested dictionaries
-def extract_val(data: dict | str | int) -> str | int | dict:
+def extract_val(data: Any) -> Any:  # noqa: ANN401
+    """Extract value from DucoBox API response format.
+    
+    The DucoBox API often returns values wrapped in {'Val': actual_value} dicts.
+    This function unwraps them while passing through other types unchanged.
+    
+    Args:
+        data: Any value from the API - dict, str, int, float, bool, None, etc.
+        
+    Returns:
+        The unwrapped value if data is a dict with 'Val' key, otherwise data unchanged.
+        Can return any type: str, int, float, bool, dict, None, etc.
+    """
     if isinstance(data, dict) and "Val" in data:
         return data["Val"]
     return data
@@ -128,7 +140,7 @@ class ParameterConfig(BaseModel):
     Inc: int | None = None
 
     @unified_validator()
-    def ensure_keys(cls, values: dict) -> dict:
+    def ensure_keys(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         # Ensure all expected keys are present, set to None if not
         keys = ["Id", "Val", "Min", "Max", "Inc"]
         return {key: values.get(key) for key in keys}
@@ -216,7 +228,7 @@ class NodeGeneralInfo(BaseModel):
         return values
 
     @unified_validator()
-    def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def validate_addr(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         addr_value = values.get("Addr", {})
         # Handle empty dict from connectivity boards
         if addr_value == {}:
@@ -281,7 +293,7 @@ class VentilationFanInfo(BaseModel):
     PressEha: int | None = None
 
     @unified_validator()
-    def validate_fan_fields(cls, values: dict[str, dict | int]) -> dict[str, dict | int]:
+    def validate_fan_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         fields_to_extract = ["SpeedSup", "SpeedEha", "PressSup", "PressEha"]
         for field in fields_to_extract:
             if field in values:
@@ -297,7 +309,7 @@ class VentilationSensorInfo(BaseModel):
     TempEha: float | None = None
 
     @unified_validator()
-    def validate_sensor_fields(cls, values: dict[str, dict | float]) -> dict[str, dict | float]:
+    def validate_sensor_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         fields_to_extract = ["TempOda", "TempSup", "TempEta", "TempEha"]
         for field in fields_to_extract:
             if field in values:
@@ -321,7 +333,7 @@ class VentilationInfo(BaseModel):
     CalibError: int | None = None
 
     @unified_validator()
-    def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def validate_ventilation_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "FlowLvl", "State"]
 
         # Define keyword mappings for transformations
@@ -348,7 +360,7 @@ class HeatRecoveryGeneralInfo(BaseModel):
     TimeFilterRemain: int | None = None
 
     @unified_validator()
-    def validate_hr_general_fields(cls, values: dict[str, dict | int]) -> dict[str, dict | int]:
+    def validate_hr_general_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         if "TimeFilterRemain" in values:
             values["TimeFilterRemain"] = extract_val(values["TimeFilterRemain"])
         return values
@@ -359,7 +371,7 @@ class HeatRecoveryBypassInfo(BaseModel):
     Pos: int | None = None
 
     @unified_validator()
-    def validate_bypass_fields(cls, values: dict[str, dict | int]) -> dict[str, dict | int]:
+    def validate_bypass_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         if "Pos" in values:
             values["Pos"] = extract_val(values["Pos"])
         return values
@@ -479,7 +491,7 @@ class ActionInfo(BaseModel):
     Enum: list[str] | None  # Keep Enum optional
 
     @unified_validator()
-    def set_optional_enum(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def set_optional_enum(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":
             values["Enum"] = None  # Ensure Enum is set to None if not required
