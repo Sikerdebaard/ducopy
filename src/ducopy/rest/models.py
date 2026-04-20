@@ -40,11 +40,13 @@ from functools import wraps
 
 try:
     from pydantic import VERSION
-    PYDANTIC_V2 = int(VERSION.split('.')[0]) >= 2
+
+    PYDANTIC_V2 = int(VERSION.split(".")[0]) >= 2
 except (ImportError, AttributeError, ValueError, TypeError):
     # Fallback: try importing model_validator which only exists in V2
     try:
         from pydantic import model_validator
+
         PYDANTIC_V2 = True
     except ImportError:
         PYDANTIC_V2 = False
@@ -87,13 +89,13 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
 # Helper function to extract `Val` from nested dictionaries
 def extract_val(data: Any) -> Any:  # noqa: ANN401
     """Extract value from DucoBox API response format.
-    
+
     The DucoBox API often returns values wrapped in {'Val': actual_value} dicts.
     This function unwraps them while passing through other types unchanged.
-    
+
     Args:
         data: Any value from the API - dict, str, int, float, bool, None, etc.
-        
+
     Returns:
         The unwrapped value if data is a dict with 'Val' key, otherwise data unchanged.
         Can return any type: str, int, float, bool, dict, None, etc.
@@ -181,7 +183,9 @@ class GeneralInfo(BaseModel):
     Val: str
 
     @unified_validator()
-    def normalize_val_format(cls, values: dict[str, Any] | Any) -> dict[str, Any]:  # noqa: ANN401
+    def normalize_val_format(
+        cls, values: dict[str, Any] | Any
+    ) -> dict[str, Any]:  # noqa: ANN401
         """
         Handle both board formats:
         - Communication/Print board: {"Val": "BOX"}
@@ -236,13 +240,13 @@ class NodeGeneralInfo(BaseModel):
         else:
             values["Addr"] = extract_val(addr_value)
         return values
-    
+
     @unified_validator()
     def normalize_serial_board(cls, values: dict[str, Any]) -> dict[str, Any]:
         """
         Handle SerialBoard field which can be:
         - Communication/Print board: plain string
-        - Config endpoint: plain string  
+        - Config endpoint: plain string
         """
         if "SerialBoard" in values:
             # Extract value if it's wrapped in a dict
@@ -270,10 +274,18 @@ class NetworkDucoInfo(BaseModel):
         Fields can be raw integers or {"Val": integer}.
         """
         fields_to_normalize = [
-            "CommErrorCtr", "Subtype", "Sub", "Prnt", "Asso", 
-            "RssiN2M", "HopVia", "RssiN2H", "Show", "Link"
+            "CommErrorCtr",
+            "Subtype",
+            "Sub",
+            "Prnt",
+            "Asso",
+            "RssiN2M",
+            "HopVia",
+            "RssiN2H",
+            "Show",
+            "Link",
         ]
-        
+
         for field in fields_to_normalize:
             if field in values:
                 value = values[field]
@@ -287,13 +299,16 @@ class NetworkDucoInfo(BaseModel):
 
 class VentilationFanInfo(BaseModel):
     """Fan information including speeds and pressures."""
+
     SpeedSup: int | None = None
     SpeedEha: int | None = None
     PressSup: int | None = None
     PressEha: int | None = None
 
     @unified_validator()
-    def validate_fan_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+    def validate_fan_fields(
+        cls, values: dict[str, Any]
+    ) -> dict[str, Any]:  # noqa: ANN401
         fields_to_extract = ["SpeedSup", "SpeedEha", "PressSup", "PressEha"]
         for field in fields_to_extract:
             if field in values:
@@ -303,13 +318,16 @@ class VentilationFanInfo(BaseModel):
 
 class VentilationSensorInfo(BaseModel):
     """Sensor information including temperatures."""
+
     TempOda: float | None = None
     TempSup: float | None = None
     TempEta: float | None = None
     TempEha: float | None = None
 
     @unified_validator()
-    def validate_sensor_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+    def validate_sensor_fields(
+        cls, values: dict[str, Any]
+    ) -> dict[str, Any]:  # noqa: ANN401
         fields_to_extract = ["TempOda", "TempSup", "TempEta", "TempEha"]
         for field in fields_to_extract:
             if field in values:
@@ -333,8 +351,18 @@ class VentilationInfo(BaseModel):
     CalibError: int | None = None
 
     @unified_validator()
-    def validate_ventilation_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
-        fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "FlowLvl", "State"]
+    def validate_ventilation_fields(
+        cls, values: dict[str, Any]
+    ) -> dict[str, Any]:  # noqa: ANN401
+        fields_to_extract = [
+            "FlowLvlOvrl",
+            "TimeStateRemain",
+            "TimeStateEnd",
+            "Mode",
+            "FlowLvlTgt",
+            "FlowLvl",
+            "State",
+        ]
 
         # Define keyword mappings for transformations
         time_fields = [field for field in values if "time" in field.lower()]
@@ -357,10 +385,13 @@ class VentilationInfo(BaseModel):
 
 class HeatRecoveryGeneralInfo(BaseModel):
     """Heat recovery general information."""
+
     TimeFilterRemain: int | None = None
 
     @unified_validator()
-    def validate_hr_general_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+    def validate_hr_general_fields(
+        cls, values: dict[str, Any]
+    ) -> dict[str, Any]:  # noqa: ANN401
         if "TimeFilterRemain" in values:
             values["TimeFilterRemain"] = extract_val(values["TimeFilterRemain"])
         return values
@@ -368,10 +399,13 @@ class HeatRecoveryGeneralInfo(BaseModel):
 
 class HeatRecoveryBypassInfo(BaseModel):
     """Heat recovery bypass information."""
+
     Pos: int | None = None
 
     @unified_validator()
-    def validate_bypass_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+    def validate_bypass_fields(
+        cls, values: dict[str, Any]
+    ) -> dict[str, Any]:  # noqa: ANN401
         if "Pos" in values:
             values["Pos"] = extract_val(values["Pos"])
         return values
@@ -379,6 +413,7 @@ class HeatRecoveryBypassInfo(BaseModel):
 
 class HeatRecoveryInfo(BaseModel):
     """Heat recovery information."""
+
     General: HeatRecoveryGeneralInfo | None = None
     Bypass: HeatRecoveryBypassInfo | None = None
 
@@ -424,13 +459,14 @@ class NodesInfoResponse(BaseModel):
             # Filter out None values (should never happen, but be defensive)
             values["Nodes"] = [node for node in values["Nodes"] if node is not None]
             filtered_count = len(values["Nodes"])
-            
+
             # Log if we filtered out any None values (indicates API issue)
             if filtered_count < original_count:
                 from loguru import logger
+
                 logger.warning(
                     "Filtered out {} None node(s) from API response - this indicates unexpected API behavior",
-                    original_count - filtered_count
+                    original_count - filtered_count,
                 )
         return values
 
@@ -491,7 +527,9 @@ class ActionInfo(BaseModel):
     Enum: list[str] | None  # Keep Enum optional
 
     @unified_validator()
-    def set_optional_enum(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+    def set_optional_enum(
+        cls, values: dict[str, Any]
+    ) -> dict[str, Any]:  # noqa: ANN401
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":
             values["Enum"] = None  # Ensure Enum is set to None if not required
