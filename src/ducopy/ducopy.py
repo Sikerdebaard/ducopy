@@ -140,6 +140,17 @@ class DucoPy:
         """
         return self.client.post_action_node(action, value, node_id)
 
+    def update_config(self, config):
+        """Update the configuration for the box device.
+
+        Args:
+            config (Config): The configuration data to update.
+
+        Returns:
+            Config: The updated configuration response from the server.
+        """
+        return self.client.patch_config(config=config)
+
     def update_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
         """Update the configuration for a specific node.
 
@@ -172,6 +183,14 @@ class DucoPy:
             dict: General API information.
         """
         return self.client.get_info(module=module, submodule=submodule, parameter=parameter)
+
+    def get_config(self):
+        """Retrieve configuration settings for the box device.
+
+        Returns:
+            NodesResponse: Configuration settings for all nodes.
+        """
+        return self.client.get_config()
 
     def get_nodes(self) -> NodesInfoResponse:
         """Retrieve a list of all nodes.

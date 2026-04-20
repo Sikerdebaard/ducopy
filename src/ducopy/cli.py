@@ -269,6 +269,36 @@ def change_action_node(
         typer.echo(f"Failed to change node action for node {node_id}: {e}")
         raise typer.Exit(code=1)
 
+@app.command()
+def update_config(
+    base_url: str,
+    config_json: Annotated[str, typer.Option(help="Configuration parameters as a JSON string")],
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
+) -> None:
+    """
+    Update configuration settings for the box device.
+
+    Args:
+        base_url (str): The base URL of the API.
+        config_json (str): Configuration parameters as a JSON string.
+        format (str): Output format: pretty or json.
+    """
+    base_url = validate_url(base_url)
+    facade = DucoPy(base_url)
+    try:
+        config = json.loads(config_json)
+        #config = ConfigRequest(**config_data)
+    except (json.JSONDecodeError, ValidationError) as e:
+        logger.error("Invalid configuration data: {}", e)
+        typer.echo(f"Invalid configuration data: {e}")
+        raise typer.Exit(code=1)
+    try:
+        response = facade.update_config(config=config)
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error updating configuration for the box device: {}", str(e))
+        typer.echo(f"Failed to update configuration for the box device : {e}")
+        raise typer.Exit(code=1)
 
 @app.command()
 def update_config_node(
@@ -303,6 +333,26 @@ def update_config_node(
         typer.echo(f"Failed to update configuration for node {node_id}: {e}")
         raise typer.Exit(code=1)
 
+@app.command()
+def get_config(
+    base_url: str, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+) -> None:
+    """
+    Retrieve configuration settings for the box device.
+
+    Args:
+        base_url (str): The base URL of the API.
+        format (str): Output format: pretty or json.
+    """
+    base_url = validate_url(base_url)
+    facade = DucoPy(base_url)
+    try:
+        response = facade.get_config()
+        print_output(response, format)
+    except Exception as e:
+        logger.error("Error fetching box configuration: {}", str(e))
+        typer.echo(f"Failed to fetch box configuration: {e}")
+        raise typer.Exit(code=1)
 
 @app.command()
 def get_config_nodes(
