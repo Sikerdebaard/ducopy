@@ -1026,7 +1026,7 @@ class APIClient:
         # Send PATCH request if validation passes
         endpoint = f"/config/nodes/{node_id}"
         logger.info("Sending PATCH request with body: {}", request_body)
-        response = self.session.patch(endpoint, json=request_body)
+        response = self.session.patch(endpoint, data=json.dumps(request_body, separators=(',', ':')))
         response.raise_for_status()
         logger.debug("Updated config for node ID: {}", node_id)
 
