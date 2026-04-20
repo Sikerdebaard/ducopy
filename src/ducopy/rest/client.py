@@ -728,7 +728,10 @@ class APIClient:
                 "RssiN2H": {"Val": gen1_data.get("rssi_n2h")} if gen1_data.get("rssi_n2h") is not None else None,
                 "Show": {"Val": gen1_data.get("show")} if gen1_data.get("show") is not None else None,
                 "Link": {"Val": gen1_data.get("link")} if gen1_data.get("link") is not None else None,
-            } if gen1_data.get("cerr") is not None else None,
+            } if any(
+                gen1_data.get(key) is not None
+                for key in ["cerr", "subtype", "sub", "prnt", "asso", "rssi_n2m", "hop_via", "rssi_n2h", "show", "link"]
+            ) else None,
             "Ventilation": {
                 "State": {"Val": gen1_data.get("state")} if gen1_data.get("state") else None,
                 "FlowLvlOvrl": {"Val": gen1_data.get("ovrl", 0)} if gen1_data.get("ovrl") is not None else None,
