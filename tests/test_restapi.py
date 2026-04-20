@@ -23,8 +23,6 @@ def client() -> APIClient:
         https_url = f"https://{duco_ip}"
         try:
             client = APIClient(base_url=https_url, verify=True)
-            # Test connection by attempting to detect generation
-            _ = client.generation
         except (requests.exceptions.ConnectionError, requests.exceptions.SSLError, ConnectionError):
             # HTTPS failed due to connection/SSL issues, fallback to HTTP for Communication and Print Board
             http_url = f"http://{duco_ip}"
@@ -52,8 +50,6 @@ def client_insecure() -> APIClient:
         https_url = f"https://{duco_ip}"
         try:
             client = APIClient(base_url=https_url, verify=False)
-            # Test connection by attempting to detect generation
-            _ = client.generation
         except (requests.exceptions.ConnectionError, requests.exceptions.SSLError, ConnectionError):
             # HTTPS failed due to connection/SSL issues, fallback to HTTP for Communication and Print Board
             http_url = f"http://{duco_ip}"

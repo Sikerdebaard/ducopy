@@ -40,6 +40,7 @@ import ssl
 from urllib.parse import urljoin
 from collections.abc import Callable
 import time
+from typing import Any
 from ducopy.rest.apikeygenerator import ApiKeyGenerator
 from loguru import logger
 import urllib3
@@ -71,18 +72,18 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
 
 
 class DucoUrlSession(requests.Session):
-    def __init__(self, base_url: str, verify: bool | str = True, endpoint_mapper: Callable[[str], str] | None = None, timeout: int = 10) -> None:
+    def __init__(self, base_url: str | Any, verify: bool | str = True, endpoint_mapper: Callable[[str], str] | None = None, timeout: int = 10) -> None:
         """
         Initializes the BaseUrlSession with a base URL and optional SSL verification setting.
 
         Args:
-            base_url (str): The base URL to prepend to relative URLs.
+            base_url (str | Any): The base URL to prepend to relative URLs. Accepts str or URL-like objects (e.g., Pydantic HttpUrl).
             verify (bool | str): Path to the certificate or a boolean indicating SSL verification.
             endpoint_mapper (Callable[[str], str] | None): Optional function to map endpoints for API generation compatibility.
             timeout (int): Request timeout in seconds. Defaults to 10 seconds.
         """
         super().__init__()
-        self.base_url = base_url
+        self.base_url: str = str(base_url)
         self.timeout = timeout
 
         if isinstance(verify, str):
@@ -107,7 +108,7 @@ class DucoUrlSession(requests.Session):
         self.api_key_cache_duration: int = 60
         self.endpoint_mapper: Callable[[str], str] | None = endpoint_mapper
 
-        logger.info("Initialized DucoUrlSession for base URL: {}", base_url)
+        logger.info("Initialized DucoUrlSession for base URL: {}", self.base_url)
 
     def _ensure_apikey(self, info_data: dict | None = None) -> None:
         """Refresh API key if expired or missing.

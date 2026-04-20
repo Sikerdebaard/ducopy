@@ -83,11 +83,11 @@ class APIClient:
     BOXINFOGET_ENERGY_CACHE_TTL = 10
     
     def __init__(self, base_url: HttpUrl, verify: bool = True, auto_detect: bool = True) -> None:
-        self.base_url = base_url
+        self.base_url: str = str(base_url)
         if verify:
-            self.session = DucoUrlSession(base_url, verify=self._duco_pem(), endpoint_mapper=self._map_endpoint)
+            self.session = DucoUrlSession(self.base_url, verify=self._duco_pem(), endpoint_mapper=self._map_endpoint)
         else:
-            self.session = DucoUrlSession(base_url, verify=verify, endpoint_mapper=self._map_endpoint)
+            self.session = DucoUrlSession(self.base_url, verify=verify, endpoint_mapper=self._map_endpoint)
         
         # API generation tracking
         self._api_version = None
@@ -188,7 +188,7 @@ class APIClient:
         logger.info("Detecting API generation...")
         
         # Check if we're using HTTPS
-        is_https = str(self.base_url).startswith('https://')
+        is_https = self.base_url.startswith('https://')
         
         try:
             # Try to get /info endpoint directly (without mapping, without API key)
@@ -237,7 +237,7 @@ class APIClient:
                     "Connectivity Board detected but connected via HTTP. "
                     "Some data may be missing or unavailable as Connectivity Boards are designed for HTTPS. "
                     "For full functionality and better security, use HTTPS instead: https://{}", 
-                    str(self.base_url).replace("http://", "").rstrip("/")
+                    self.base_url.replace("http://", "").rstrip("/")
                 )
             
             # Cache device identification info
