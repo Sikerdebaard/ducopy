@@ -2,7 +2,7 @@ import pytest
 import requests_mock
 import requests.exceptions
 import json
-from typing import Any
+from typing import Any, Protocol
 import importlib.resources as pkg_resources
 from ducopy.rest.client import APIClient
 from ducopy.rest.utils import DucoUrlSession, CustomHostNameCheckingAdapter
@@ -18,6 +18,14 @@ from ducopy.rest.models import (
 )
 
 BASE_URL = "http://localhost:5000"
+
+
+class _RequestLike(Protocol):
+    qs: dict[str, list[str]]
+
+
+class _ContextLike(Protocol):
+    status_code: int
 
 
 def load_mock_data(filename: str) -> dict[str, Any]:
@@ -254,9 +262,7 @@ def test_get_config_nodes_legacy(
         },
     }
 
-    def nodeinfoget_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any]:  # noqa: ANN401
+    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -289,9 +295,7 @@ def test_get_config_nodes_legacy(
         },
     }
 
-    def nodeconfigget_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any]:  # noqa: ANN401
+    def nodeconfigget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -355,9 +359,7 @@ def test_get_config_nodes_legacy_all_nodes_fail(
         },
     }
 
-    def nodeinfoget_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any]:  # noqa: ANN401
+    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -420,9 +422,7 @@ def test_get_config_nodes_legacy_partial_failure(
         },
     }
 
-    def nodeinfoget_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any]:  # noqa: ANN401
+    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -438,8 +438,8 @@ def test_get_config_nodes_legacy_partial_failure(
 
     # Mock responses: node 1 and 3 config succeed, node 2 config fails
     def node_config_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any] | str:  # noqa: ANN401
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any] | str:
         params = request.qs
         node_id = int(params["node"][0]) if "node" in params else 1
 
@@ -632,9 +632,7 @@ def test_get_nodes_legacy(
         },
     }
 
-    def nodeinfoget_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any]:  # noqa: ANN401
+    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
         node_values = request.qs.get("node")
         if not node_values:
             context.status_code = 400
@@ -693,8 +691,8 @@ def test_get_nodes_legacy_partial_failure(
 
     # Mock responses: node 1 and 3 succeed, node 2 fails
     def node_info_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any] | str:  # noqa: ANN401
+        request: _RequestLike, context: _ContextLike
+    ) -> dict[str, Any] | str:
         params = request.qs
         node_id = int(params["node"][0]) if "node" in params else 1
 
@@ -1006,9 +1004,7 @@ def test_get_board_info_legacy_swversion_fallback_to_box_node(
 
     # Mock the legacy /nodeinfoget lookup used to fetch per-node details.
     # Return proper legacy response structure with integer node ID and required fields
-    def nodeinfoget_callback(
-        request: Any, context: Any
-    ) -> dict[str, Any]:  # noqa: ANN401
+    def nodeinfoget_callback(request: _RequestLike, context: _ContextLike) -> dict[str, Any]:
         query_values = {key.lower(): value for key, value in request.qs.items()}
         requested_node = None
         for key in ("node", "nodeid", "nodename", "id", "name"):

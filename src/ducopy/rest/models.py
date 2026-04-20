@@ -183,9 +183,7 @@ class GeneralInfo(BaseModel):
     Val: str
 
     @unified_validator()
-    def normalize_val_format(
-        cls, values: dict[str, Any] | Any
-    ) -> dict[str, Any]:  # noqa: ANN401
+    def normalize_val_format(cls, values: object) -> object:
         """
         Handle both board formats:
         - Communication/Print board: {"Val": "BOX"}
