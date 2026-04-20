@@ -240,7 +240,7 @@ def raw_patch(
 @app.command()
 def change_action_node(
     base_url: str,
-    node_id: int,
+    node_id: Annotated[int, typer.Option(help="The ID of the node to perform the action on")],
     action: Annotated[str, typer.Option(help="The action key (e.g., 'OperState' for legacy boards, 'SetVentilationState' for modern boards)")],
     value: Annotated[str, typer.Option(help="The state/value to set (e.g., AUTO, MAN1, AUT1)")],
     format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
@@ -273,7 +273,7 @@ def change_action_node(
 @app.command()
 def update_config_node(
     base_url: str,
-    node_id: int,
+    node_id: Annotated[int, typer.Option(help="The ID of the node to update")],
     config_json: Annotated[str, typer.Option(help="Configuration parameters as a JSON string")],
     format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
 ) -> None:
@@ -420,7 +420,9 @@ def get_nodes(
 
 @app.command()
 def get_node_info(
-    base_url: str, node_id: int, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    node_id: Annotated[int, typer.Option(help="The ID of the node to retrieve information for")],
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
 ) -> None:
     """Retrieve information for a specific node by ID."""
     base_url = validate_url(base_url)
@@ -443,7 +445,9 @@ def get_node_info(
 
 @app.command()
 def get_config_node(
-    base_url: str, node_id: int, format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty"
+    base_url: str,
+    node_id: Annotated[int, typer.Option(help="The ID of the node to retrieve configuration for")],
+    format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
 ) -> None:
     """Retrieve configuration settings for a specific node."""
     base_url = validate_url(base_url)
@@ -500,7 +504,7 @@ def get_action(
 @app.command()
 def get_actions_node(
     base_url: str,
-    node_id: int,
+    node_id: Annotated[int, typer.Option(help="The ID of the node to retrieve actions for")],
     action: str = None,
     format: Annotated[str, typer.Option(help="Output format: pretty or json")] = "pretty",
 ) -> None:
