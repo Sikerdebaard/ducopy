@@ -52,11 +52,11 @@ import sys
 class DucoPy:
     """A facade for interacting with the Duco API."""
 
-    def __init__(self, base_url: HttpUrl, verify: bool = True, log_level: str = None) -> None:
+    def __init__(self, base_url: str | HttpUrl, verify: bool = True, log_level: str = None) -> None:
         """Initialize the DucoPy facade with the base URL and verification option.
 
         Args:
-            base_url (HttpUrl): The base URL of the Duco API.
+            base_url (str | HttpUrl): The base URL of the Duco API. Accepts both strings and Pydantic HttpUrl objects.
             verify (bool, optional): Whether to verify SSL certificates. Defaults to True.
             log_level (str, optional): Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL). Defaults to None.
         """

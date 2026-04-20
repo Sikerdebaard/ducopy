@@ -82,7 +82,7 @@ class APIClient:
     # This reduces redundant network calls when fetching node_id=1 repeatedly (e.g., in get_nodes())
     BOXINFOGET_ENERGY_CACHE_TTL = 10
     
-    def __init__(self, base_url: HttpUrl, verify: bool = True, auto_detect: bool = True) -> None:
+    def __init__(self, base_url: str | HttpUrl, verify: bool = True, auto_detect: bool = True) -> None:
         self.base_url: str = str(base_url)
         if verify:
             self.session = DucoUrlSession(self.base_url, verify=self._duco_pem(), endpoint_mapper=self._map_endpoint)
