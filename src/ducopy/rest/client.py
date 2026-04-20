@@ -141,8 +141,15 @@ class APIClient:
                 # or section-based payloads such as {"General": ..., "Network": ...}.
                 legacy_keys = {"board", "serial", "mac", "node"}
                 legacy_sections = {"General", "Network", "EnergyInfo"}
+
+                has_legacy_keys = any(key in data for key in legacy_keys)
+                has_legacy_sections = any(section in data for section in legacy_sections)
+                has_general_time = (
+                    isinstance(data.get("General"), dict)
+                    and "Time" in data["General"]
+                )
                 
-                if any(key in data for key in legacy_keys | legacy_sections) or len(data) > 0:
+                if has_legacy_keys or has_legacy_sections or has_general_time:
                     logger.info("Legacy board confirmed via /boxinfoget endpoint")
                     return True
             
