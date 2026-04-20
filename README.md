@@ -1,14 +1,23 @@
 # DucoPy
 
-**DucoPy** is a Python library and CLI tool that allows for full control of a **DucoBox** ventilation unit equipped with a **DucoBox Connectivity Board**. Using DucoPy, you can retrieve information, control settings, and monitor logs of your DucoBox system directly from your Python environment or command line.
+**DucoPy** is a Python library and CLI tool for controlling a **DucoBox** ventilation unit equipped with either a **DucoBox Connectivity Board** (modern API) or **Communication and Print Board** (legacy API). Using DucoPy, you can retrieve information and control settings of your DucoBox system directly from your Python environment or command line.
+
+> **Note:** The Connectivity Board provides full API access with advanced features like logs, detailed action discovery, and configuration updates. The Communication and Print Board has a reduced feature set focused on core operations like retrieving node information and changing ventilation states.
 
 ## Features
 
-- Retrieve API information from the DucoBox system
-- Get details about available modules, nodes, actions, and logs
-- Interact with specific nodes and configure them
-- Control actions available on the DucoBox unit
+### All Board Types
+- Retrieve node information and details
+- Get configuration settings for nodes
+- Change ventilation operation states (AUTO, MANUAL, etc.)
 - Output information in a structured or JSON format
+
+### Connectivity Board Only
+- Retrieve API version information and available endpoints
+- Get detailed action metadata for nodes
+- Monitor system logs
+- Update node configuration programmatically
+- Execute advanced actions (reboot, reset config, etc.)
 
 ## Installation
 
@@ -41,21 +50,25 @@ from ducopy.ducopy import DucoPy
 from pydantic import HttpUrl
 
 # Initialize the DucoPy client with the base URL of your DucoBox
+# Use https:// for Connectivity Board, http:// for Communication/Print Board
 base_url = "https://your-ducobox-ip"  # Replace with the actual IP
 ducopy = DucoPy(base_url=base_url)
 
-# Retrieve API information
-api_info = ducopy.get_api_info()
-print(api_info)
-
-# Get nodes
+# Get nodes (works on all board types)
 nodes = ducopy.get_nodes()
-print(nodes.model_dump(mode='json'))
+# For JSON output, handle both Pydantic v1 and v2
+print(nodes.model_dump(mode='json') if hasattr(nodes, 'model_dump') else nodes.dict())
 
-# Retrieve information for a specific node
+# Retrieve information for a specific node (works on all board types)
 node_id = 1
 node_info = ducopy.get_node_info(node_id=node_id)
-print(node_info.model_dump(mode='json'))
+print(node_info.model_dump(mode='json') if hasattr(node_info, 'model_dump') else node_info.dict())
+
+# Get API information (Connectivity Board only)
+# For Communication/Print Board, this will raise NotImplementedError
+if not ducopy.client.is_legacy_api:
+    api_info = ducopy.get_api_info()
+    print(api_info)
 
 # Close the DucoPy client connection when done
 ducopy.close()
@@ -65,16 +78,21 @@ ducopy.close()
 
 Here is a list of the main methods available in the `DucoPy` facade:
 
-- `get_api_info() -> dict`: Retrieve general API information.
+#### Supported on All Board Types
 - `get_info(module: str | None = None, submodule: str | None = None, parameter: str | None = None) -> dict`: Retrieve information about modules and parameters.
-- `get_nodes() -> NodesResponse`: Retrieve a list of all nodes in the DucoBox system.
+- `get_nodes() -> NodesInfoResponse`: Retrieve a list of all nodes in the DucoBox system.
 - `get_node_info(node_id: int) -> NodeInfo`: Get details about a specific node by its ID.
 - `get_config_node(node_id: int) -> ConfigNodeResponse`: Get configuration settings for a specific node.
+- `change_action_node(action: str, value: str, node_id: int) -> ActionsChangeResponse`: Change node state (limited to operation state changes on Communication/Print Board).
+
+#### Connectivity Board Only
+- `get_api_info() -> dict`: Retrieve general API information.
 - `get_action(action: str | None = None) -> dict`: Retrieve information about a specific action.
 - `get_actions_node(node_id: int, action: str | None = None) -> ActionsResponse`: Retrieve available actions for a specific node.
 - `get_logs() -> dict`: Retrieve the system logs from the DucoBox.
+- `update_config_node(node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse`: Update node configuration.
 
-All methods return a dictionary or a Pydantic model instance. Use `.model_dump(mode='json')` on Pydantic models to get JSON-serializable output if needed.
+All methods return a dictionary or a Pydantic model instance. For JSON-serializable output from Pydantic models, use the version-compatible pattern shown in the examples above: `obj.model_dump(mode='json') if hasattr(obj, 'model_dump') else obj.dict()`. Alternatively, use the CLI which handles both Pydantic v1 and v2 automatically.
 
 ## Using the CLI Client
 
@@ -92,42 +110,64 @@ This will display a list of available commands.
 
 ### Example Commands
 
-1. **Retrieve API information**
+#### Available on All Board Types
+
+1. **Get details about nodes**
 
    ```bash
-   ducopy get-api-info --base-url https://your-ducobox-ip
+   ducopy get-nodes https://your-ducobox-ip
    ```
 
-2. **Get details about nodes**
+2. **Get information for a specific node**
 
    ```bash
-   ducopy get-nodes --base-url https://your-ducobox-ip
+   ducopy get-node-info https://your-ducobox-ip --node-id 1
    ```
 
-3. **Get information for a specific node**
+3. **Change node ventilation state**
 
+   For **Communication and Print Board** (legacy, HTTP):
    ```bash
-   ducopy get-node-info --base-url https://your-ducobox-ip --node-id 1
+   ducopy change-action-node http://your-ducobox-ip --node-id 1 --action OperState --value AUTO
    ```
 
-4. **Get actions available for a node**
-
+   For **Connectivity Board** (modern, HTTPS):
    ```bash
-   ducopy get-actions-node --base-url https://your-ducobox-ip --node-id 1
+   # First, check available actions for the node
+   ducopy get-actions-node https://your-ducobox-ip --node-id 1
+   
+   # Then use a valid action from the list (e.g., SetVentilationState)
+   ducopy change-action-node https://your-ducobox-ip --node-id 1 --action SetVentilationState --value AUTO
    ```
 
-5. **Retrieve system logs**
+   **Note**: Communication and Print Boards only support `OperState` and `SetVentilationState` actions. Connectivity Boards support additional actions that can be discovered using `get-actions-node`.
+
+#### Connectivity Board Only
+
+4. **Retrieve API information**
 
    ```bash
-   ducopy get-logs --base-url https://your-ducobox-ip
+   ducopy get-api-info https://your-ducobox-ip
+   ```
+
+5. **Get actions available for a node**
+
+   ```bash
+   ducopy get-actions-node https://your-ducobox-ip --node-id 1
+   ```
+
+6. **Retrieve system logs**
+
+   ```bash
+   ducopy get-logs https://your-ducobox-ip
    ```
 
 ### Output Formatting
 
-All commands support an optional `--output-format` argument to specify the output format (`pretty` or `json`):
+All commands support an optional `--format` argument to specify the output format (`pretty` or `json`):
 
 ```bash
-ducopy get-nodes --base-url https://your-ducobox-ip --output-format json
+ducopy get-nodes https://your-ducobox-ip --format json
 ```
 
 - `pretty` (default): Formats the output in a structured, readable style.
@@ -138,7 +178,7 @@ ducopy get-nodes --base-url https://your-ducobox-ip --output-format json
 To set the logging level, use the `--logging-level` option, which accepts values like `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.
 
 ```bash
-ducopy --logging-level DEBUG get-nodes --base-url https://your-ducobox-ip
+ducopy --logging-level DEBUG get-nodes https://your-ducobox-ip
 ```
 
 ## Contributing

@@ -34,17 +34,25 @@
 # SOFTWARE.
 #
 # ensure pydantic 1 and 2 support since HA is in a transition phase
-try:
-    from pydantic import BaseModel, Field, root_validator
-
-    PYDANTIC_V2 = False
-except ImportError:
-    from pydantic import BaseModel, Field, model_validator
-
-    PYDANTIC_V2 = True
-
+from pydantic import BaseModel, Field
 from typing import Any, Literal
 from functools import wraps
+
+try:
+    from pydantic import VERSION
+    PYDANTIC_V2 = int(VERSION.split('.')[0]) >= 2
+except (ImportError, AttributeError, ValueError, TypeError):
+    # Fallback: try importing model_validator which only exists in V2
+    try:
+        from pydantic import model_validator
+        PYDANTIC_V2 = True
+    except ImportError:
+        PYDANTIC_V2 = False
+
+if PYDANTIC_V2:
+    from pydantic import model_validator
+else:
+    from pydantic import root_validator
 
 
 def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
@@ -52,43 +60,17 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
     A unified validator decorator for Pydantic 1.x and 2.x.
     Ensures that user-defined validators run before field-level validation,
     allowing data transformations to occur first (e.g. extracting `.Val`).
-
-    Validator methods should be defined as classmethods using @classmethod decorator.
-    
-    Example usage:
-        @unified_validator()
-        @classmethod
-        def validate_something(cls, values):
-            # Transformation logic here
-            return values
     """
 
     def decorator(user_func):  # noqa: ANN001, ANN202
         """
-        `user_func` is the actual validation function (e.g. `@classmethod def validate_something(cls, values): ...`)
+        `user_func` is the actual validation function (e.g. `def validate_something(cls, values): ...`)
         """
-        # Handle both regular functions and classmethods
-        # Decorator stacking: When decorators are stacked like:
-        #   @unified_validator()
-        #   @classmethod
-        #   def validate_addr(cls, values): ...
-        # 
-        # Python applies them bottom-up, so @classmethod wraps the function first,
-        # then @unified_validator() receives a classmethod object.
-        # We need to extract the underlying function (__func__) to properly wrap it.
-        # 
-        # Note: This assumes @classmethod is the immediate decorator before the function.
-        # If other decorators are between @unified_validator() and @classmethod, they should
-        # be applied after @classmethod instead.
-        if isinstance(user_func, classmethod):
-            actual_func = user_func.__func__
-        else:
-            actual_func = user_func
 
-        @wraps(actual_func)
+        @wraps(user_func)
         def wrapper(cls, values):  # noqa: ANN202, ANN001
             # Call the user function to transform 'values' as needed
-            return actual_func(cls, values)
+            return user_func(cls, values)
 
         if PYDANTIC_V2:
             # For Pydantic 2.x, we must set mode="before" to run prior to field validation
@@ -103,10 +85,51 @@ def unified_validator(*uargs, **ukwargs):  # noqa: ANN201, ANN002, ANN003
 
 
 # Helper function to extract `Val` from nested dictionaries
-def extract_val(data: dict | str | int) -> str | int | dict:
+def extract_val(data: Any) -> Any:  # noqa: ANN401
+    """Extract value from DucoBox API response format.
+    
+    The DucoBox API often returns values wrapped in {'Val': actual_value} dicts.
+    This function unwraps them while passing through other types unchanged.
+    
+    Args:
+        data: Any value from the API - dict, str, int, float, bool, None, etc.
+        
+    Returns:
+        The unwrapped value if data is a dict with 'Val' key, otherwise data unchanged.
+        Can return any type: str, int, float, bool, dict, None, etc.
+    """
     if isinstance(data, dict) and "Val" in data:
         return data["Val"]
     return data
+
+
+# Helper function to normalize 'node' key to 'Node'
+def normalize_node_key(values: dict[str, Any]) -> dict[str, Any]:
+    """
+    Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board).
+    Handles various formats:
+    - lowercase 'node' -> uppercase 'Node'
+    - extracts value from either key
+    - removes duplicate lowercase key
+    """
+    node_value = values.get("Node", values.get("node"))
+    if node_value is not None:
+        values["Node"] = node_value
+    # Remove any lowercase 'node' key to avoid duplicates
+    values.pop("node", None)
+    return values
+
+
+# Helper function to normalize Node field and extract Val
+def normalize_node_with_val(values: dict[str, Any]) -> dict[str, Any]:
+    """
+    Normalize Node field which can be:
+    - Communication/Print board: {"Val": 1}
+    - Connectivity board: 1
+    """
+    if "Node" in values:
+        values["Node"] = extract_val(values["Node"])
+    return values
 
 
 class ParameterConfig(BaseModel):
@@ -117,8 +140,7 @@ class ParameterConfig(BaseModel):
     Inc: int | None = None
 
     @unified_validator()
-    @classmethod
-    def ensure_keys(cls, values: dict) -> dict:
+    def ensure_keys(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         # Ensure all expected keys are present, set to None if not
         keys = ["Id", "Val", "Min", "Max", "Inc"]
         return {key: values.get(key) for key in keys}
@@ -144,6 +166,11 @@ class NodeConfig(BaseModel):
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
 
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        return normalize_node_key(values)
+
 
 class NodesResponse(BaseModel):
     Nodes: list[NodeConfig]
@@ -153,47 +180,161 @@ class GeneralInfo(BaseModel):
     Id: int | None = None
     Val: str
 
+    @unified_validator()
+    def normalize_val_format(cls, values: dict[str, Any] | Any) -> dict[str, Any]:  # noqa: ANN401
+        """
+        Handle both board formats:
+        - Communication/Print board: {"Val": "BOX"}
+        - Connectivity board: {"Id": None, "Val": "BOX"}
+        """
+        # If we receive just a dict with only "Val", normalize it
+        if isinstance(values, dict):
+            if "Val" in values and "Id" not in values:
+                # This is Communication/Print board format - already correct
+                values.setdefault("Id", None)
+        return values
+
 
 class NodeGeneralInfo(BaseModel):
     Type: GeneralInfo
-    Addr: int = Field(...)
+    Addr: int | None = None
+    SwVersion: GeneralInfo | None = None
+    SerialBoard: str | None = None
 
     @unified_validator()
-    @classmethod
-    def validate_addr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["Addr"] = extract_val(values.get("Addr", {}))
+    def normalize_type_format(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle Type field which can be:
+        - Communication/Print board: {"Val": "BOX"} (missing Id)
+        - Connectivity board: {"Id": None, "Val": "BOX"}
+        """
+        if "Type" in values and isinstance(values["Type"], dict):
+            # Ensure it has both Id and Val fields
+            if "Val" in values["Type"] and "Id" not in values["Type"]:
+                values["Type"]["Id"] = None
+        return values
+
+    @unified_validator()
+    def normalize_swversion_format(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle SwVersion field which can be:
+        - Communication/Print board: {"Val": "1.0.0"} (missing Id)
+        - Connectivity board: {"Id": 65544, "Val": "1.0.0"}
+        """
+        if "SwVersion" in values and isinstance(values["SwVersion"], dict):
+            # Ensure it has both Id and Val fields
+            if "Val" in values["SwVersion"] and "Id" not in values["SwVersion"]:
+                values["SwVersion"]["Id"] = None
+        return values
+
+    @unified_validator()
+    def validate_addr(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+        addr_value = values.get("Addr", {})
+        # Handle empty dict from connectivity boards
+        if addr_value == {}:
+            values["Addr"] = None
+        else:
+            values["Addr"] = extract_val(addr_value)
+        return values
+    
+    @unified_validator()
+    def normalize_serial_board(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle SerialBoard field which can be:
+        - Communication/Print board: plain string
+        - Config endpoint: plain string  
+        """
+        if "SerialBoard" in values:
+            # Extract value if it's wrapped in a dict
+            values["SerialBoard"] = extract_val(values["SerialBoard"])
         return values
 
 
 class NetworkDucoInfo(BaseModel):
-    CommErrorCtr: int = Field(...)
+    CommErrorCtr: int | None = None
+    # Network topology fields from Communication and Print Board
+    Subtype: int | None = None
+    Sub: int | None = None
+    Prnt: int | None = None
+    Asso: int | None = None
+    RssiN2M: int | None = None  # RSSI node to master
+    HopVia: int | None = None
+    RssiN2H: int | None = None  # RSSI node to hop
+    Show: int | None = None
+    Link: int | None = None
 
     @unified_validator()
-    @classmethod
-    def validate_comm_error_ctr(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        values["CommErrorCtr"] = extract_val(values.get("CommErrorCtr", {}))
+    def normalize_network_fields(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize all network fields to extract Val from Communication/Print board format.
+        Fields can be raw integers or {"Val": integer}.
+        """
+        fields_to_normalize = [
+            "CommErrorCtr", "Subtype", "Sub", "Prnt", "Asso", 
+            "RssiN2M", "HopVia", "RssiN2H", "Show", "Link"
+        ]
+        
+        for field in fields_to_normalize:
+            if field in values:
+                value = values[field]
+                # Handle empty dict from connectivity boards
+                if value == {}:
+                    values[field] = None
+                else:
+                    values[field] = extract_val(value)
+        return values
+
+
+class VentilationFanInfo(BaseModel):
+    """Fan information including speeds and pressures."""
+    SpeedSup: int | None = None
+    SpeedEha: int | None = None
+    PressSup: int | None = None
+    PressEha: int | None = None
+
+    @unified_validator()
+    def validate_fan_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+        fields_to_extract = ["SpeedSup", "SpeedEha", "PressSup", "PressEha"]
+        for field in fields_to_extract:
+            if field in values:
+                values[field] = extract_val(values[field])
+        return values
+
+
+class VentilationSensorInfo(BaseModel):
+    """Sensor information including temperatures."""
+    TempOda: float | None = None
+    TempSup: float | None = None
+    TempEta: float | None = None
+    TempEha: float | None = None
+
+    @unified_validator()
+    def validate_sensor_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+        fields_to_extract = ["TempOda", "TempSup", "TempEta", "TempEha"]
+        for field in fields_to_extract:
+            if field in values:
+                values[field] = extract_val(values[field])
         return values
 
 
 class VentilationInfo(BaseModel):
     State: str | None = None
-    FlowLvlOvrl: int = Field(...)
+    FlowLvlOvrl: int | None = None
     TimeStateRemain: int | None = None
     TimeStateEnd: int | None = None
     Mode: str | None = None
     FlowLvlTgt: int | None = None
+    FlowLvl: int | None = None
+    Fan: VentilationFanInfo | None = None
+    Sensor: VentilationSensorInfo | None = None
+    # Calibration fields (from Connectivity Board Ventilation.Calibration section)
+    CalibIsValid: bool | None = None
+    CalibState: str | None = None
+    CalibError: int | None = None
 
     @unified_validator()
-    @classmethod
-    def validate_ventilation_fields(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
-        fields_to_extract = [
-            "FlowLvlOvrl",
-            "TimeStateRemain",
-            "TimeStateEnd",
-            "Mode",
-            "FlowLvlTgt",
-            "State",
-        ]
+    def validate_ventilation_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+        fields_to_extract = ["FlowLvlOvrl", "TimeStateRemain", "TimeStateEnd", "Mode", "FlowLvlTgt", "FlowLvl", "State"]
 
         # Define keyword mappings for transformations
         time_fields = [field for field in values if "time" in field.lower()]
@@ -214,13 +355,40 @@ class VentilationInfo(BaseModel):
         return values
 
 
+class HeatRecoveryGeneralInfo(BaseModel):
+    """Heat recovery general information."""
+    TimeFilterRemain: int | None = None
+
+    @unified_validator()
+    def validate_hr_general_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+        if "TimeFilterRemain" in values:
+            values["TimeFilterRemain"] = extract_val(values["TimeFilterRemain"])
+        return values
+
+
+class HeatRecoveryBypassInfo(BaseModel):
+    """Heat recovery bypass information."""
+    Pos: int | None = None
+
+    @unified_validator()
+    def validate_bypass_fields(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+        if "Pos" in values:
+            values["Pos"] = extract_val(values["Pos"])
+        return values
+
+
+class HeatRecoveryInfo(BaseModel):
+    """Heat recovery information."""
+    General: HeatRecoveryGeneralInfo | None = None
+    Bypass: HeatRecoveryBypassInfo | None = None
+
+
 class SensorData(BaseModel):
     """Dynamically captures sensor data, including environmental sensors."""
 
     data: dict[str, int | float | str] | None = Field(default_factory=dict)
 
     @unified_validator()
-    @classmethod
     def extract_sensor_values(cls, values: dict[str, Any]) -> dict[str, Any]:
         # Iterate over all fields and extract their `Val` if they have it
         values["data"] = {key: extract_val(value) for key, value in values.items()}
@@ -230,13 +398,41 @@ class SensorData(BaseModel):
 class NodeInfo(BaseModel):
     Node: int
     General: NodeGeneralInfo
-    NetworkDuco: NetworkDucoInfo | None
-    Ventilation: VentilationInfo | None
+    NetworkDuco: NetworkDucoInfo | None = None
+    Ventilation: VentilationInfo | None = None
+    HeatRecovery: HeatRecoveryInfo | None = None
     Sensor: SensorData | None = Field(default=None)
+
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Normalize Node field which can be:
+        - Communication/Print board: {"Val": 1}
+        - Connectivity board: 1
+        """
+        return normalize_node_with_val(values)
 
 
 class NodesInfoResponse(BaseModel):
-    Nodes: list[NodeInfo] | None = Field(default=None)
+    Nodes: list[NodeInfo] = Field(default_factory=list)
+
+    @unified_validator()
+    def filter_none_nodes(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Filter out any None values from Nodes list as defensive measure."""
+        if "Nodes" in values and values["Nodes"] is not None:
+            original_count = len(values["Nodes"])
+            # Filter out None values (should never happen, but be defensive)
+            values["Nodes"] = [node for node in values["Nodes"] if node is not None]
+            filtered_count = len(values["Nodes"])
+            
+            # Log if we filtered out any None values (indicates API issue)
+            if filtered_count < original_count:
+                from loguru import logger
+                logger.warning(
+                    "Filtered out {} None node(s) from API response - this indicates unexpected API behavior",
+                    original_count - filtered_count
+                )
+        return values
 
 
 # ConfigNodeResponse for specific node configuration
@@ -259,6 +455,11 @@ class ConfigNodeResponse(BaseModel):
     SwitchMode: ParameterConfig | None = None
     FlowLvlSwitch: ParameterConfig | None = None
     Name: ParameterConfig | None = None
+
+    @unified_validator()
+    def normalize_node_field(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Normalize 'node' (Communication and Print Board) to 'Node' (Connectivity Board)"""
+        return normalize_node_key(values)
 
 
 class ConfigNodeRequest(BaseModel):
@@ -290,8 +491,7 @@ class ActionInfo(BaseModel):
     Enum: list[str] | None  # Keep Enum optional
 
     @unified_validator()
-    @classmethod
-    def set_optional_enum(cls, values: dict[str, dict | str | int]) -> dict[str, dict | str | int]:
+    def set_optional_enum(cls, values: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
         """Set Enum only if ValType is Enum; ignore otherwise."""
         if values.get("ValType") != "Enum":
             values["Enum"] = None  # Ensure Enum is set to None if not required
@@ -304,5 +504,6 @@ class ActionsResponse(BaseModel):
 
 
 class ActionsChangeResponse(BaseModel):
-    Code: int
+    Code: int | None = None
     Result: str
+    Action: str | None = None
