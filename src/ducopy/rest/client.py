@@ -133,7 +133,6 @@ class APIClient:
         try:
             logger.debug("Attempting to confirm legacy board via /boxinfoget endpoint...")
             response = self.session.request("GET", "/boxinfoget", ensure_apikey=False)
-            response.raise_for_status()
             data = response.json()
             
             if isinstance(data, dict):
