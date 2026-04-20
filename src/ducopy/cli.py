@@ -389,7 +389,7 @@ def get_info(
     # Combine both
     output = {
         "generation_info": generation_info,
-        "api_info": info_data,
+        "info": info_data,
     }
     
     print_output(output, format)
