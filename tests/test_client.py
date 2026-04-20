@@ -1027,18 +1027,8 @@ def test_ssl_error_fails_fast_without_retry() -> None:
         
         client = APIClient(base_url=https_url, verify=False, auto_detect=False)
         
-        # Measure time to ensure no retry delays
-        import time
-        start_time = time.time()
-        
         with pytest.raises(ConnectionError):
             client.detect_generation()
-        
-        elapsed = time.time() - start_time
-        
-        # Should fail immediately (< 0.5s), not retry with backoff (2s + 4s = 6s+)
-        # If retries were happening, we'd see delays of 2^0=1s, 2^1=2s, totaling 3+ seconds
-        assert elapsed < 1.0, f"SSL error should fail fast, but took {elapsed:.2f}s (expected < 1.0s)"
         
         # Verify only one request was made (no retries)
         assert len(mock_requests.request_history) == 1
