@@ -144,7 +144,11 @@ class DucoUrlSession(requests.Session):
                 self.api_key_timestamp = time.time()
 
                 self.headers.update({"Api-Key": self.api_key})
-                logger.debug(f"Api-Key: {self.api_key}")
+                if len(self.api_key) > 8:
+                    redacted_api_key = f"{self.api_key[:4]}...{self.api_key[-4:]}"
+                else:
+                    redacted_api_key = "***"
+                logger.debug(f"Api-Key: {redacted_api_key}")
             else:
                 # Communication and Print Board - doesn't use API keys
                 logger.debug("Communication and Print Board detected - API keys not required")
