@@ -126,7 +126,6 @@ class DucoUrlSession(requests.Session):
             else:
                 endpoint = self.endpoint_mapper("/info") if self.endpoint_mapper else "/info"
                 req = self.request("GET", endpoint, ensure_apikey=False)
-                req.raise_for_status()
                 data = req.json()
 
             # Check if this is a Connectivity Board (modern) API response with nested structure

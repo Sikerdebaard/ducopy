@@ -193,7 +193,6 @@ class APIClient:
             # Try to get /info endpoint directly (without mapping, without API key)
             logger.debug("Attempting to fetch /info endpoint...")
             response = self.session.request("GET", "/info", ensure_apikey=False)
-            response.raise_for_status()
             info_data = response.json()
             
             # If we got here, /info exists - this indicates Connectivity Board (modern API)
@@ -210,7 +209,6 @@ class APIClient:
                 self.session._ensure_apikey(info_data=info_data)
                 
                 api_response = self.session.request("GET", "/api", ensure_apikey=False)
-                api_response.raise_for_status()
                 api_info = api_response.json()
                 
                 self._api_version = api_info.get("ApiVersion", {}).get("Val")
@@ -490,7 +488,6 @@ class APIClient:
                 else:
                     logger.debug("Fetching device info from /info endpoint (Connectivity Board)")
                     response = self.session.request("GET", "/info", ensure_apikey=False)
-                    response.raise_for_status()
                     data = response.json()
                 
                 # Extract MAC and serial from nested structure
@@ -512,7 +509,6 @@ class APIClient:
                 # Try /boardinfo endpoint for MAC and serial
                 try:
                     response = self.session.request("GET", "/boardinfo", ensure_apikey=False)
-                    response.raise_for_status()
                     board_data = response.json()
                     
                     # Communication/Print board /boardinfo returns plain values:
