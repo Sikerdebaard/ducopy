@@ -3,7 +3,11 @@ import requests_mock
 import requests.exceptions
 import json
 from typing import Any
+import importlib.resources as pkg_resources
 from ducopy.rest.client import APIClient
+from ducopy.rest.utils import DucoUrlSession, CustomHostNameCheckingAdapter
+from requests.adapters import HTTPAdapter
+from ducopy import certs
 from ducopy.rest.models import NodeInfo, ConfigNodeResponse, ActionsResponse, NodesInfoResponse, ActionsChangeResponse, NodesResponse
 
 BASE_URL = "http://localhost:5000"
@@ -58,6 +62,15 @@ def client() -> APIClient:
 def mock_requests() -> Any:  # noqa: ANN401
     with requests_mock.Mocker() as m:
         yield m
+
+
+def test_duco_url_session_mounts_custom_adapter_only_for_https() -> None:
+    cert_path = str(pkg_resources.files(certs).joinpath("api_cert.pem"))
+    session = DucoUrlSession(base_url="http://localhost:5000", verify=cert_path)
+
+    assert isinstance(session.get_adapter("https://example.com"), CustomHostNameCheckingAdapter)
+    assert isinstance(session.get_adapter("http://example.com"), HTTPAdapter)
+    assert not isinstance(session.get_adapter("http://example.com"), CustomHostNameCheckingAdapter)
 
 
 def test_get_api_info(client: APIClient, mock_requests: requests_mock.Mocker) -> None:

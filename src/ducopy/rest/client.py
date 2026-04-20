@@ -747,7 +747,7 @@ class APIClient:
             "Sensor": sensor_fields if sensor_fields else None,
         }
 
-    def raw_get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict:
+    def raw_get(self, endpoint: str, params: dict[str, Any] | None = None) -> Any:
         """
         Perform a raw GET request to the specified endpoint.
         
@@ -760,7 +760,7 @@ class APIClient:
             params (dict[str, Any], optional): Query parameters to include in the request.
 
         Returns:
-            dict: JSON response from the server.
+            Any: JSON response from the server.
         """
         # Map endpoint if using Communication and Print Board
         mapped_endpoint = self._map_endpoint(endpoint)
@@ -771,7 +771,7 @@ class APIClient:
         logger.debug("Received response for raw GET request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
+    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> Any:
         """
         Perform a raw POST request to the specified endpoint with retry logic.
         
@@ -787,7 +787,7 @@ class APIClient:
                 Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
-            dict: JSON response from the server.
+            Any: JSON response from the server.
         """
         # Map endpoint if using Communication and Print Board
         mapped_endpoint = self._map_endpoint(endpoint)
@@ -808,7 +808,7 @@ class APIClient:
         logger.debug("Received response for raw POST request to endpoint: {}", mapped_endpoint)
         return response.json()
 
-    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
+    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> Any:
         """
         Perform a raw PATCH request to the specified endpoint with retry logic.
         
@@ -824,7 +824,7 @@ class APIClient:
                 Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
-            dict: JSON response from the server.
+            Any: JSON response from the server.
         """
         # Map endpoint if using Communication and Print Board
         mapped_endpoint = self._map_endpoint(endpoint)

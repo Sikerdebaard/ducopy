@@ -83,7 +83,7 @@ class DucoPy:
         )
         logger.info("DucoPy logging configured with level: {}", level)
 
-    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
+    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> Any:
         """Perform a raw POST request to the specified endpoint.
 
         Args:
@@ -95,11 +95,11 @@ class DucoPy:
                 Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
-            dict: JSON response from the server.
+            Any: JSON response from the server.
         """
         return self.client.raw_post(endpoint=endpoint, data=data, content_type=content_type)
 
-    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> dict:
+    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> Any:
         """Perform a raw PATCH request to the specified endpoint.
 
         Args:
@@ -111,19 +111,19 @@ class DucoPy:
                 Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
-            dict: JSON response from the server.
+            Any: JSON response from the server.
         """
         return self.client.raw_patch(endpoint=endpoint, data=data, content_type=content_type)
 
-    def raw_get(self, endpoint: str, params: dict = None) -> dict:
+    def raw_get(self, endpoint: str, params: dict[str, Any] | None = None) -> Any:
         """Perform a raw GET request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the GET request to (e.g., "/api").
-            params (dict, optional): Query parameters to include in the request. Defaults to None.
+            params (dict[str, Any], optional): Query parameters to include in the request. Defaults to None.
 
         Returns:
-            dict: JSON response from the server.
+            Any: JSON response from the server.
         """
         return self.client.raw_get(endpoint=endpoint, params=params)
 

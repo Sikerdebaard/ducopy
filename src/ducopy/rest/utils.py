@@ -92,10 +92,9 @@ class DucoUrlSession(requests.Session):
             ssl_context.load_verify_locations(verify)
             self.verify = True
 
-            # Mount adapter with SSLContext to the session
+            # Mount custom SSL adapter only for HTTPS; HTTP must keep the default adapter.
             adapter = CustomHostNameCheckingAdapter(ssl_context, custom_host_mapping)
             self.mount("https://", adapter)
-            self.mount("http://", adapter)
         else:
             self.verify = verify
             # Suppress InsecureRequestWarning when SSL verification is intentionally disabled
