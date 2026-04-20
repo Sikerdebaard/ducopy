@@ -676,10 +676,10 @@ def test_get_board_info_legacy_with_cached_info(client: APIClient, mock_requests
     client._board_uptime = 2452
     client._device_info_cached = True
     
-    # Mock the /nodelist endpoint for BOX node lookup
-    # Note: SwVersion should come from cached _board_swversion, not from BOX node
-    mock_data = load_mock_data("nodes_legacy_with_box.json")
-    mock_requests.get(f"{BASE_URL}/nodelist", json=mock_data)
+    # Mock the legacy /nodelist endpoint for BOX node lookup.
+    # Legacy clients expect {"nodelist": [...]} here, not the modern {"Nodes": [...]} shape.
+    # Note: SwVersion should come from cached _board_swversion, not from BOX node.
+    mock_requests.get(f"{BASE_URL}/nodelist", json={"nodelist": ["BOX"]})
     
     board_info = client.get_board_info()
     
