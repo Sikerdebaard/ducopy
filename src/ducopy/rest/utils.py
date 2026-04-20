@@ -55,7 +55,11 @@ def custom_host_mapping(url: str) -> str:
 
 class CustomHostNameCheckingAdapter(HTTPAdapter):
     def __init__(
-        self, ssl_context: ssl.SSLContext, hostname_resolver: Callable[[str], str], *args: tuple, **kwargs: dict
+        self,
+        ssl_context: ssl.SSLContext,
+        hostname_resolver: Callable[[str], str],
+        *args: tuple,
+        **kwargs: dict,
     ) -> None:
         self.ssl_context = ssl_context
         self.hostname_resolver = hostname_resolver
@@ -65,14 +69,26 @@ class CustomHostNameCheckingAdapter(HTTPAdapter):
         kwargs["ssl_context"] = self.ssl_context
         return super().init_poolmanager(*args, **kwargs)
 
-    def cert_verify(self, conn: requests.adapters.HTTPAdapter, url: str, verify: bool, cert: str | None) -> None:
+    def cert_verify(
+        self,
+        conn: requests.adapters.HTTPAdapter,
+        url: str,
+        verify: bool,
+        cert: str | None,
+    ) -> None:
         # conn.assert_hostname = self.hostname_resolver(url)
         conn.assert_hostname = False
         return super().cert_verify(conn, url, verify, cert)
 
 
 class DucoUrlSession(requests.Session):
-    def __init__(self, base_url: str | HttpUrl, verify: bool | str = True, endpoint_mapper: Callable[[str], str] | None = None, timeout: int = 10) -> None:
+    def __init__(
+        self,
+        base_url: str | HttpUrl,
+        verify: bool | str = True,
+        endpoint_mapper: Callable[[str], str] | None = None,
+        timeout: int = 10,
+    ) -> None:
         """
         Initializes the BaseUrlSession with a base URL and optional SSL verification setting.
 
@@ -100,7 +116,7 @@ class DucoUrlSession(requests.Session):
             # Suppress InsecureRequestWarning when SSL verification is intentionally disabled
             if not verify:
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                warnings.filterwarnings('ignore', message='Unverified HTTPS request')
+                warnings.filterwarnings("ignore", message="Unverified HTTPS request")
 
         self.api_key: str | None = None
         self.api_key_timestamp: float = 0.0
@@ -111,20 +127,25 @@ class DucoUrlSession(requests.Session):
 
     def _ensure_apikey(self, info_data: dict | None = None) -> None:
         """Refresh API key if expired or missing.
-        
+
         Args:
             info_data (dict, optional): Pre-fetched /info response data to avoid duplicate requests.
                                        If None, will fetch /info data.
         """
-        if not self.api_key or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration:
+        if (
+            not self.api_key
+            or (time.time() - self.api_key_timestamp) > self.api_key_cache_duration
+        ):
             logger.debug("API key is missing or expired. Fetching a new one.")
-            
+
             # Use provided info data if available, otherwise fetch it
             if info_data is not None:
                 logger.debug("Using pre-fetched /info data for API key generation")
                 data = info_data
             else:
-                endpoint = self.endpoint_mapper("/info") if self.endpoint_mapper else "/info"
+                endpoint = (
+                    self.endpoint_mapper("/info") if self.endpoint_mapper else "/info"
+                )
                 req = self.request("GET", endpoint, ensure_apikey=False)
                 data = req.json()
 
@@ -149,21 +170,30 @@ class DucoUrlSession(requests.Session):
                 logger.debug(f"Api-Key: {redacted_api_key}")
             else:
                 # Communication and Print Board - doesn't use API keys
-                logger.debug("Communication and Print Board detected - API keys not required")
+                logger.debug(
+                    "Communication and Print Board detected - API keys not required"
+                )
                 self.api_key = "legacy-no-key-required"
                 self.api_key_timestamp = time.time()
                 # Set cache duration to effectively infinite for legacy boards to avoid unnecessary refreshes
                 # Legacy boards don't use API keys, so no need to periodically re-fetch /boxinfoget
-                self.api_key_cache_duration = 365 * 24 * 60 * 60 * 10  # 10 years in seconds
+                self.api_key_cache_duration = (
+                    365 * 24 * 60 * 60 * 10
+                )  # 10 years in seconds
             logger.info("API key refreshed at {}", time.ctime(self.api_key_timestamp))
 
     def request(
-        self, method: str, url: str, ensure_apikey: bool = True, *args: tuple, **kwargs: dict
+        self,
+        method: str,
+        url: str,
+        ensure_apikey: bool = True,
+        *args: tuple,
+        **kwargs: dict,
     ) -> requests.Response:
         """
         Sends a request, automatically prepending the base URL to the given URL if it's relative.
         Implements an exponential backoff retry strategy (up to 3 attempts) on request failures.
-        
+
         Note: API key validation is automatically skipped for /info and /boxinfoget endpoints
         to prevent circular dependencies, as _ensure_apikey() itself fetches these endpoints
         to generate or validate API keys.
@@ -183,7 +213,7 @@ class DucoUrlSession(requests.Session):
         # Skip API key check for /info and /boxinfoget endpoints to avoid circular dependency
         # and prevent duplicate requests (_ensure_apikey itself fetches these endpoints)
         is_info_endpoint = url.rstrip("/") in ("/info", "/boxinfoget")
-        
+
         if ensure_apikey and not is_info_endpoint:
             self._ensure_apikey()
 
@@ -198,7 +228,11 @@ class DucoUrlSession(requests.Session):
         for attempt in range(max_retries):
             try:
                 logger.debug(
-                    "Sending {} request to URL: {} (attempt {}/{})", method.upper(), url, attempt + 1, max_retries
+                    "Sending {} request to URL: {} (attempt {}/{})",
+                    method.upper(),
+                    url,
+                    attempt + 1,
+                    max_retries,
                 )
                 response = super().request(method, url, *args, **kwargs)
                 response.raise_for_status()
@@ -219,33 +253,43 @@ class DucoUrlSession(requests.Session):
                 if self._is_non_retryable_error(e):
                     logger.debug("Non-retryable error detected: {}", type(e).__name__)
                     raise e
-                
+
                 if not self._retry_with_backoff(attempt, max_retries, url, e):
                     raise e
 
     def _is_non_retryable_error(self, error: Exception) -> bool:
         """Check if an error is non-retryable and should fail fast without backoff.
-        
+
         Args:
             error: The exception to check
-            
+
         Returns:
             bool: True if the error should not be retried (e.g., SSL errors, connection refused)
         """
         # SSL/TLS errors are not transient - wrong protocol, certificate issues, etc.
-        if isinstance(error, (requests.exceptions.SSLError, urllib3.exceptions.SSLError)):
+        if isinstance(
+            error, (requests.exceptions.SSLError, urllib3.exceptions.SSLError)
+        ):
             return True
-        
+
         # Connection refused typically means wrong port or service not running
         if isinstance(error, requests.exceptions.ConnectionError):
             error_msg = str(error).lower()
             if "connection refused" in error_msg or "connection reset" in error_msg:
                 return True
-        
+
         return False
 
-    def _retry_with_backoff(self, attempt: int, max_retries: int, url: str, error: Exception) -> bool:
-        logger.error("Request to {} failed (attempt {}/{}). Error: {}", url, attempt + 1, max_retries, error)
+    def _retry_with_backoff(
+        self, attempt: int, max_retries: int, url: str, error: Exception
+    ) -> bool:
+        logger.error(
+            "Request to {} failed (attempt {}/{}). Error: {}",
+            url,
+            attempt + 1,
+            max_retries,
+            error,
+        )
 
         # If not on the last attempt, wait (2^attempt seconds), then retry
         if attempt < max_retries - 1:

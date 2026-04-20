@@ -52,7 +52,9 @@ import sys
 class DucoPy:
     """A facade for interacting with the Duco API."""
 
-    def __init__(self, base_url: str | HttpUrl, verify: bool = True, log_level: str = None) -> None:
+    def __init__(
+        self, base_url: str | HttpUrl, verify: bool = True, log_level: str = None
+    ) -> None:
         """Initialize the DucoPy facade with the base URL and verification option.
 
         Args:
@@ -62,72 +64,95 @@ class DucoPy:
         """
         if log_level is not None:
             self.configure_logging(log_level)
-        
+
         self.client = APIClient(base_url, verify)
         logger.info("Initialized DucoPy with base URL: {}", base_url)
 
     @classmethod
     def configure_logging(cls, level: str = "INFO", sink: object = sys.stdout) -> None:
         """Configure logging for the DucoPy library.
-        
+
         Args:
             level (str): Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
             sink: Where to output logs (default: sys.stdout)
             format_string (str): Custom format string for log messages
         """
         logger.remove()
-        
+
         logger.add(
             sink=sink,
             level=level.upper(),
         )
         logger.info("DucoPy logging configured with level: {}", level)
 
-    def raw_post(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> Any:
+    def raw_post(
+        self,
+        endpoint: str,
+        data: str | dict[str, Any] | list | None = None,
+        content_type: str | None = "application/json",
+    ) -> dict[str, object] | list[object] | str | int | float | bool | None:
         """Perform a raw POST request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the POST request to (e.g., "/api").
-            data (str | dict | list, optional): The data to include in the request body. 
+            data (str | dict | list, optional): The data to include in the request body.
                 If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
                 If str, will be passed through unchanged. Defaults to None.
             content_type (str | None, optional): Content-Type header value. Defaults to "application/json".
                 Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
-            Any: JSON response from the server.
+            dict[str, object] | list[object] | str | int | float | bool | None:
+                JSON response from the server.
         """
-        return self.client.raw_post(endpoint=endpoint, data=data, content_type=content_type)
+        return self.client.raw_post(
+            endpoint=endpoint, data=data, content_type=content_type
+        )
 
-    def raw_patch(self, endpoint: str, data: str | dict[str, Any] | list | None = None, content_type: str | None = "application/json") -> Any:
+    def raw_patch(
+        self,
+        endpoint: str,
+        data: str | dict[str, Any] | list | None = None,
+        content_type: str | None = "application/json",
+    ) -> dict[str, object] | list[object] | str | int | float | bool | None:
         """Perform a raw PATCH request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the PATCH request to (e.g., "/api").
-            data (str | dict | list, optional): The data to include in the request body. 
+            data (str | dict | list, optional): The data to include in the request body.
                 If dict or list, will be JSON-serialized with compact formatting (no whitespace) to avoid 400 errors.
                 If str, will be passed through unchanged. Defaults to None.
             content_type (str | None, optional): Content-Type header value. Defaults to "application/json".
                 Set to None to omit the Content-Type header (e.g., for non-JSON payloads).
 
         Returns:
-            Any: JSON response from the server.
+            dict[str, object] | list[object] | str | int | float | bool | None:
+                JSON response from the server.
         """
-        return self.client.raw_patch(endpoint=endpoint, data=data, content_type=content_type)
+        return self.client.raw_patch(
+            endpoint=endpoint, data=data, content_type=content_type
+        )
 
-    def raw_get(self, endpoint: str, params: dict[str, Any] | None = None) -> Any:
+    def raw_get(
+        self,
+        endpoint: str,
+        params: dict[str, object] | None = None,
+    ) -> dict[str, object] | list[object] | str | int | float | bool | None:
         """Perform a raw GET request to the specified endpoint.
 
         Args:
             endpoint (str): The endpoint to send the GET request to (e.g., "/api").
-            params (dict[str, Any], optional): Query parameters to include in the request. Defaults to None.
+            params (dict[str, object], optional): Query parameters to include in the request. Defaults to None.
 
         Returns:
-            Any: JSON response from the server.
+            dict[str, object] | list[object] | str | int | float | bool | None:
+                JSON response from the server.
         """
         return self.client.raw_get(endpoint=endpoint, params=params)
 
-    def change_action_node(self, action: str, value: str, node_id: int) -> ActionsChangeResponse:
+    def change_action_node(
+        self, action: str, value: str, node_id: int
+    ) -> ActionsChangeResponse:
         """Change the action for a specific node.
 
         Args:
@@ -140,7 +165,9 @@ class DucoPy:
         """
         return self.client.post_action_node(action, value, node_id)
 
-    def update_config_node(self, node_id: int, config: ConfigNodeRequest) -> ConfigNodeResponse:
+    def update_config_node(
+        self, node_id: int, config: ConfigNodeRequest
+    ) -> ConfigNodeResponse:
         """Update the configuration for a specific node.
 
         Args:
@@ -160,7 +187,12 @@ class DucoPy:
         """
         return self.client.get_api_info()
 
-    def get_info(self, module: str | None = None, submodule: str | None = None, parameter: str | None = None) -> dict:
+    def get_info(
+        self,
+        module: str | None = None,
+        submodule: str | None = None,
+        parameter: str | None = None,
+    ) -> dict:
         """Fetch general API information.
 
         Args:
@@ -171,7 +203,9 @@ class DucoPy:
         Returns:
             dict: General API information.
         """
-        return self.client.get_info(module=module, submodule=submodule, parameter=parameter)
+        return self.client.get_info(
+            module=module, submodule=submodule, parameter=parameter
+        )
 
     def get_nodes(self) -> NodesInfoResponse:
         """Retrieve a list of all nodes.
@@ -222,7 +256,9 @@ class DucoPy:
         """
         return self.client.get_action(action=action)
 
-    def get_actions_node(self, node_id: int, action: str | None = None) -> ActionsResponse:
+    def get_actions_node(
+        self, node_id: int, action: str | None = None
+    ) -> ActionsResponse:
         """Retrieve available actions for a specific node.
 
         Args:
@@ -245,10 +281,10 @@ class DucoPy:
     def get_board_info(self) -> dict:
         """
         Get board-level information including MAC address, serial number, and software version.
-        
+
         This method provides a normalized interface for retrieving board information
         regardless of board type (Connectivity Board or Communication/Print Board).
-        
+
         Returns:
             dict: Board information returned by the underlying API client. The response
             includes the common fields below and may include additional board-specific
@@ -259,7 +295,7 @@ class DucoPy:
                     "SwVersion": str,     # Software version (e.g., "2.0.6.0" or "16010.3.7.0")
                     "Uptime": int | None, # Board uptime in seconds (Communication/Print boards only, None for Connectivity)
                 }
-                
+
         Example:
             >>> facade = DucoPy("https://192.168.1.100")
             >>> board_info = facade.get_board_info()

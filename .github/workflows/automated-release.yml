@@ -1,0 +1,290 @@
+name: Automated Release
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel to run
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - main
+
+concurrency:
+  group: automated-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    name: Preview Release (TestPyPI)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'workflow_dispatch' && github.event.inputs.channel == 'preview')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to release
+        id: release_gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "reason=manual-dispatch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PARENT_COUNT=$(git rev-list --parents -n 1 "$GITHUB_SHA" | awk '{print NF-1}')
+          if [ "$PARENT_COUNT" -lt 2 ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=not-a-merge-commit" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BEFORE_SHA="${{ github.event.before }}"
+          if [ -n "$BEFORE_SHA" ] && git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            CHANGED_FILES=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" | wc -l | tr -d ' ')
+          else
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | wc -l | tr -d ' ')
+          fi
+
+          if [ "$CHANGED_FILES" -gt 0 ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "reason=merge-with-changes" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no-changes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute release tags
+        if: steps.release_gate.outputs.should_release == 'true'
+        id: release_tags
+        run: |
+          git fetch --tags --force
+          LAST_RELEASE_NUM=$(git tag -l 'r*' | sed -n 's/^r\([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)
+          if [ -z "$LAST_RELEASE_NUM" ]; then
+            LAST_RELEASE_NUM=0
+          fi
+
+          NEXT_RELEASE_NUM=$((LAST_RELEASE_NUM + 1))
+          MAIN_TAG="r${NEXT_RELEASE_NUM}"
+          PREVIEW_TAG="${MAIN_TAG}-preview.${GITHUB_RUN_NUMBER}"
+
+          echo "main_tag=${MAIN_TAG}" >> "$GITHUB_OUTPUT"
+          echo "preview_tag=${PREVIEW_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        if: steps.release_gate.outputs.should_release == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Set preview version
+        if: steps.release_gate.outputs.should_release == 'true'
+        id: preview_version
+        run: |
+          BASE_VERSION=$(python -c "import re, pathlib; t = pathlib.Path('pyproject.toml').read_text(encoding='utf-8'); m = re.search(r'^version\\s*=\\s*\"([^\"]+)\"', t, re.MULTILINE); print(m.group(1) if m else '')")
+          if [ -z "$BASE_VERSION" ]; then
+            echo "Could not read version from pyproject.toml" >&2
+            exit 1
+          fi
+
+          PREVIEW_VERSION="${BASE_VERSION}.dev${GITHUB_RUN_NUMBER}"
+          echo "preview_version=${PREVIEW_VERSION}" >> "$GITHUB_OUTPUT"
+
+          python - << 'EOF'
+          import pathlib
+          import re
+
+          path = pathlib.Path("pyproject.toml")
+          text = path.read_text(encoding="utf-8")
+          preview_version = "${{ steps.preview_version.outputs.preview_version }}"
+          text = re.sub(
+              r'^(version\s*=\s*")[^"]*(")',
+              rf'\1{preview_version}\2',
+              text,
+              flags=re.MULTILINE,
+          )
+          path.write_text(text, encoding="utf-8")
+          print(f"Set preview version: {preview_version}")
+          EOF
+
+      - name: Build package
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: python -m build
+
+      - name: Check package
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: twine check dist/*
+
+      - name: Publish preview to TestPyPI
+        if: steps.release_gate.outputs.should_release == 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        run: python -m twine upload --repository testpypi --skip-existing dist/*
+
+      - name: Create GitHub prerelease
+        if: steps.release_gate.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tags.outputs.preview_tag }}
+          name: ${{ steps.release_tags.outputs.preview_tag }}
+          prerelease: true
+          generate_release_notes: true
+          files: dist/*
+
+      - name: Upload build artifacts
+        if: steps.release_gate.outputs.should_release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-packages-${{ steps.preview_version.outputs.preview_version }}
+          path: dist/
+          retention-days: 14
+
+  main:
+    name: Main Release (PyPI)
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.channel == 'main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to release
+        id: release_gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "reason=manual-dispatch" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PARENT_COUNT=$(git rev-list --parents -n 1 "$GITHUB_SHA" | awk '{print NF-1}')
+          if [ "$PARENT_COUNT" -lt 2 ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=not-a-merge-commit" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BEFORE_SHA="${{ github.event.before }}"
+          if [ -n "$BEFORE_SHA" ] && git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            CHANGED_FILES=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" | wc -l | tr -d ' ')
+          else
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" | wc -l | tr -d ' ')
+          fi
+
+          if [ "$CHANGED_FILES" -gt 0 ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "reason=merge-with-changes" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no-changes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Compute release tag
+        if: steps.release_gate.outputs.should_release == 'true'
+        id: release_tag
+        run: |
+          git fetch --tags --force
+          LAST_RELEASE_NUM=$(git tag -l 'r*' | sed -n 's/^r\([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)
+          if [ -z "$LAST_RELEASE_NUM" ]; then
+            LAST_RELEASE_NUM=0
+          fi
+
+          NEXT_RELEASE_NUM=$((LAST_RELEASE_NUM + 1))
+          MAIN_TAG="r${NEXT_RELEASE_NUM}"
+          echo "tag=${MAIN_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect version change
+        id: version_check
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: |
+          CURRENT_VERSION=$(python -c "import re, pathlib; t = pathlib.Path('pyproject.toml').read_text(encoding='utf-8'); m = re.search(r'^version\\s*=\\s*\"([^\"]+)\"', t, re.MULTILINE); print(m.group(1) if m else '')")
+          if [ -z "$CURRENT_VERSION" ]; then
+            echo "Could not read version from pyproject.toml" >&2
+            exit 1
+          fi
+
+          echo "version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PREVIOUS_VERSION=$(git show HEAD~1:pyproject.toml 2>/dev/null | python -c "import re, sys; t = sys.stdin.read(); m = re.search(r'^version\\s*=\\s*\"([^\"]+)\"', t, re.MULTILINE); print(m.group(1) if m else '')")
+
+          if [ "$CURRENT_VERSION" = "$PREVIOUS_VERSION" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No version change detected in pyproject.toml; skipping main release."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Version changed: $PREVIOUS_VERSION -> $CURRENT_VERSION"
+          fi
+
+      - name: Set up Python
+        if: steps.release_gate.outputs.should_release == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: python -m build
+
+      - name: Check package
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        if: steps.version_check.outputs.changed == 'true'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python -m twine upload dist/*
+
+      - name: Create and push tag
+        if: steps.release_gate.outputs.should_release == 'true'
+        run: |
+          TAG="${{ steps.release_tag.outputs.tag }}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; skipping tag creation."
+          else
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create GitHub release
+        if: steps.release_gate.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: ${{ steps.release_tag.outputs.tag }}
+          prerelease: false
+          generate_release_notes: true
+          files: dist/*
