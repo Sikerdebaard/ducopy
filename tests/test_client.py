@@ -710,9 +710,10 @@ def test_get_board_info_legacy_without_cached_info(client: APIClient, mock_reque
     boardinfo_data = load_mock_data("board_info_legacy.json")
     mock_requests.get(f"{BASE_URL}/boardinfo", json=boardinfo_data)
     
-    # Mock the /nodelist endpoint for BOX node lookup
+    # Mock the legacy /nodelist endpoint for BOX node lookup
     nodes_data = load_mock_data("nodes_legacy_with_box.json")
-    mock_requests.get(f"{BASE_URL}/nodelist", json=nodes_data)
+    legacy_nodes_data = {"nodelist": nodes_data.get("nodelist", nodes_data.get("Nodes", []))}
+    mock_requests.get(f"{BASE_URL}/nodelist", json=legacy_nodes_data)
     
     board_info = client.get_board_info()
     
