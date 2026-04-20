@@ -67,13 +67,13 @@ jobs:
         id: release_tags
         run: |
           git fetch --tags --force
-          LAST_RELEASE_NUM=$(git tag -l 'r*' | sed -n 's/^r\([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)
+          LAST_RELEASE_NUM=$(git tag -l 'v*' | sed -n 's/^v\([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)
           if [ -z "$LAST_RELEASE_NUM" ]; then
             LAST_RELEASE_NUM=0
           fi
 
           NEXT_RELEASE_NUM=$((LAST_RELEASE_NUM + 1))
-          MAIN_TAG="r${NEXT_RELEASE_NUM}"
+          MAIN_TAG="v${NEXT_RELEASE_NUM}"
           PREVIEW_TAG="${MAIN_TAG}-preview.${GITHUB_RUN_NUMBER}"
 
           echo "main_tag=${MAIN_TAG}" >> "$GITHUB_OUTPUT"
@@ -202,13 +202,13 @@ jobs:
         id: release_tag
         run: |
           git fetch --tags --force
-          LAST_RELEASE_NUM=$(git tag -l 'r*' | sed -n 's/^r\([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)
+          LAST_RELEASE_NUM=$(git tag -l 'v*' | sed -n 's/^v\([0-9][0-9]*\)$/\1/p' | sort -n | tail -n 1)
           if [ -z "$LAST_RELEASE_NUM" ]; then
             LAST_RELEASE_NUM=0
           fi
 
           NEXT_RELEASE_NUM=$((LAST_RELEASE_NUM + 1))
-          MAIN_TAG="r${NEXT_RELEASE_NUM}"
+          MAIN_TAG="v${NEXT_RELEASE_NUM}"
           echo "tag=${MAIN_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Detect version change
