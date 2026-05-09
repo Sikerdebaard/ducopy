@@ -234,7 +234,7 @@ class DucoUrlSession(requests.Session):
                     attempt + 1,
                     max_retries,
                 )
-                response = super().request(method, url, *args, **kwargs)
+                response = super().request(method, url, timeout=15, *args, **kwargs)
                 response.raise_for_status()
                 logger.info("Received {} response from {}", response.status_code, url)
                 return response
