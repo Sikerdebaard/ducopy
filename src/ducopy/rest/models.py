@@ -202,6 +202,7 @@ class NodeGeneralInfo(BaseModel):
     Addr: int | None = None
     SwVersion: GeneralInfo | None = None
     SerialBoard: str | None = None
+    Name: str | None = None
 
     @unified_validator()
     def normalize_type_format(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -240,12 +241,29 @@ class NodeGeneralInfo(BaseModel):
         return values
 
     @unified_validator()
+    def normalize_name_format(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle Name field which can be:
+        - Communication/Print board: plain string
+        - Config endpoint: plain string
+        """
+        if "Name" in values and isinstance(values["Name"], dict):
+            print(values["Name"])
+            # Ensure it has both Id and Val fields
+            if "Val" in values["Name"] and "Id" not in values["Name"]:
+                values["Name"]["Id"] = None
+        return values
+
+    @unified_validator()
     def normalize_serial_board(cls, values: dict[str, Any]) -> dict[str, Any]:
         """
         Handle SerialBoard field which can be:
         - Communication/Print board: plain string
         - Config endpoint: plain string
         """
+        if "Name" in values:
+            # Extract value if it's wrapped in a dict
+            values["Name"] = extract_val(values["Name"])
         if "SerialBoard" in values:
             # Extract value if it's wrapped in a dict
             values["SerialBoard"] = extract_val(values["SerialBoard"])
@@ -543,3 +561,4 @@ class ActionsChangeResponse(BaseModel):
     Code: int | None = None
     Result: str
     Action: str | None = None
+
