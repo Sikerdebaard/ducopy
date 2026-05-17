@@ -241,15 +241,18 @@ class NodeGeneralInfo(BaseModel):
         return values
 
     @unified_validator()
-    def validate_name(cls, values: dict[str, Any]) -> dict[str, Any]:
-        name_value = values.get("Name", {})
-        # Handle empty dict from connectivity boards
-        if name_value == {}:
-            values["Name"] = None
-        else:
-            values["Name"] = extract_val(name_value)
+    def normalize_name_format(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Handle Name field which can be:
+        - Communication/Print board: plain string
+        - Config endpoint: plain string
+        """
+        if "Name" in values and isinstance(values["Name"], dict):
+            print(values["Name"])
+            # Ensure it has both Id and Val fields
+            if "Val" in values["Name"] and "Id" not in values["Name"]:
+                values["Name"]["Id"] = None
         return values
-
 
     @unified_validator()
     def normalize_serial_board(cls, values: dict[str, Any]) -> dict[str, Any]:
@@ -258,6 +261,9 @@ class NodeGeneralInfo(BaseModel):
         - Communication/Print board: plain string
         - Config endpoint: plain string
         """
+        if "Name" in values:
+            # Extract value if it's wrapped in a dict
+            values["Name"] = extract_val(values["Name"])
         if "SerialBoard" in values:
             # Extract value if it's wrapped in a dict
             values["SerialBoard"] = extract_val(values["SerialBoard"])
