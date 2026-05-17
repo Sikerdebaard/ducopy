@@ -552,11 +552,7 @@ class ActionsResponse(BaseModel):
 
 
 class ActionsChangeResponse(BaseModel):
-<<<<<<< HEAD
-    Code: int
-    Result: str
-=======
     Code: int | None = None
     Result: str
     Action: str | None = None
->>>>>>> d556b5eda61dae985abd2089b8b6f97ab2eed852
+
