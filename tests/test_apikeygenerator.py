@@ -10,6 +10,8 @@ def test_transform_char() -> None:
 
 def test_generate_api_key() -> None:
     generator = ApiKeyGenerator()
-    api_key = generator.generate_api_key("MOCKSERIAL123456", "00:00:00:00:00:00", 1730471603)
+    api_key = generator.generate_api_key(
+        "MOCKSERIAL123456", "00:00:00:00:00:00", 1730471603
+    )
     assert len(api_key) == 64
     assert isinstance(api_key, str)

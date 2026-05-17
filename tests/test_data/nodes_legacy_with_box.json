@@ -1,0 +1,30 @@
+{
+  "Nodes": [
+    {
+      "Node": 1,
+      "General": {
+        "Type": { "Val": "BOX" },
+        "Addr": 1,
+        "SwVersion": { "Val": "16036.13.4.0" }
+      },
+      "NetworkDuco": {
+        "CommErrorCtr": 0
+      },
+      "Ventilation": {
+        "State": "AUTO",
+        "FlowLvlOvrl": 255
+      }
+    },
+    {
+      "Node": 2,
+      "General": {
+        "Type": { "Val": "SENSOR" },
+        "Addr": 2,
+        "SwVersion": { "Val": "16036.13.4.0" }
+      },
+      "NetworkDuco": {
+        "CommErrorCtr": 0
+      }
+    }
+  ]
+}
